@@ -1,16 +1,11 @@
 #* Author: Wady <iswady@163.com>
 #* Date:   Thu Feb 24 12:00:00 2022
 
-set(EXECUTABLE_NAME "tester_${PROJECT_NAME_LOWER}")
+set(EXECUTABLE_NAME "${PROJECT_NAME_LOWER}_exe")
 
 set(SOURCE_FILES_C
-    tester.c
+    main.c
 )
-
-find_package(MHub)
-if(NOT MHUB_FOUND)
-    message(FATAL_ERROR "Missing MHub, please compile it first.")
-endif()
 
 if(ENABLE_SHARED)
     set(LIBS
@@ -24,13 +19,18 @@ endif()
 
 list(APPEND LIBS
     ${COMMON_LIBS}
-    ${MHUB_LIBRARIES}
 )
 
 set(INCLUDE_DIRS
     ${COMMON_INCLUDE_DIRS}
-    ${MHUB_INCLUDE_DIRS}
 )
+
+find_package(MHub)
+if(NOT MHUB_FOUND)
+    message(FATAL_ERROR "Missing MHub, please compile it first.")
+endif()
+list(APPEND LIBS "${MHUB_LIBRARIES}")
+list(APPEND INCLUDE_DIRS "${MHUB_INCLUDE_DIRS}")
 
 utils_apply_compile_flags(SOURCE_FILES_C STRICT_OPTIONS_CPP STRICT_OPTIONS_C)
 

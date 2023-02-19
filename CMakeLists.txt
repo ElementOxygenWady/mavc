@@ -142,6 +142,30 @@ if(ENABLE_DEBUG_LOG)
     add_definitions(-DENABLE_DEBUG_LOG=1)
 endif()
 
+if(DEFAULT_LOG_FILE)
+    add_definitions(-DDEFAULT_LOG_FILE="${DEFAULT_LOG_FILE}")
+endif()
+
+if(DEFAULT_LOG_FILE_MAX_SIZE)
+    add_definitions(-DDEFAULT_LOG_FILE_MAX_SIZE=${DEFAULT_LOG_FILE_MAX_SIZE})
+endif()
+
+if(DEFAULT_LOG_FILE_MAX_COUNT)
+    add_definitions(-DDEFAULT_LOG_FILE_MAX_COUNT=${DEFAULT_LOG_FILE_MAX_COUNT})
+endif()
+
+if(ABASE_LOG_DEFAULT_BUFFSIZE)
+    add_definitions(-DABASE_LOG_DEFAULT_BUFFSIZE=${ABASE_LOG_DEFAULT_BUFFSIZE})
+endif()
+
+if(ABASE_LOG_DEFAULT_OPTION)
+    add_definitions(-DABASE_LOG_DEFAULT_OPTION=${ABASE_LOG_DEFAULT_OPTION})
+endif()
+
+if(ABASE_LOG_DEFAULT_LEVEL)
+    add_definitions(-DABASE_LOG_DEFAULT_LEVEL=${ABASE_LOG_DEFAULT_LEVEL})
+endif()
+
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake ${CMAKE_CURRENT_BINARY_DIR}/config.h)
 # Source files can have properties that affect how they are built.
 #  GENERATED - Is this source file generated as part of the build process.
@@ -163,11 +187,33 @@ endif()
 list(APPEND COMMON_LIBS "${ABASE_LIBRARIES}")
 list(APPEND COMMON_INCLUDE_DIRS "${ABASE_INCLUDE_DIRS}")
 
+find_package(MTool)
+if(NOT MTOOL_FOUND)
+    message(FATAL_ERROR "Missing module tool, please compile it first.")
+endif()
+list(APPEND COMMON_LIBS "${MTOOL_LIBRARIES}")
+list(APPEND COMMON_INCLUDE_DIRS "${MTOOL_INCLUDE_DIRS}")
+
+find_package(E2Str)
+if(NOT E2STR_FOUND)
+    message(FATAL_ERROR "Missing E2Str, please compile it first.")
+endif()
+list(APPEND COMMON_LIBS "${E2STR_LIBRARIES}")
+list(APPEND COMMON_INCLUDE_DIRS "${E2STR_INCLUDE_DIRS}")
+
+find_package(cJSON)
+if(NOT CJSON_LIBRARIES)
+    message(FATAL_ERROR "Missing cJSON, please compile it first.")
+endif()
+list(APPEND COMMON_LIBS "${CJSON_LIBRARY}")
+list(APPEND COMMON_INCLUDE_DIRS "${CJSON_INCLUDE_DIRS}")
+
 list(REMOVE_DUPLICATES COMMON_LIBS)
 list(REMOVE_DUPLICATES COMMON_INCLUDE_DIRS)
 
 add_subdirectory(include)
 add_subdirectory(src)
+add_subdirectory(executable)
 
 if(ENABLE_TESTS)
     add_definitions(-DENABLE_TESTS=1)
