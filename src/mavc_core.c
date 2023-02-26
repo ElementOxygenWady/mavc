@@ -6,6 +6,9 @@
  */
 
 #include "private.h"
+#include "mavc_json.h"
+#include <e2str/e2str_module_message.h>
+#include <pjapp/pjapp.h>
 
 /**
  * @addtogroup SOURCE_FILES All source files
@@ -14,13 +17,62 @@
 
 #define LOG_TAG                 "CORE" //日志标签
 
+#define UI_MODULE MTOOL_MODULE_AVC_NAME ".T"
+
+
+struct mavc_t;
+
+typedef struct mavc_t mavc_t;
+
+
+struct mavc_t
+{
+    int m_current_call_id;
+};
+
+
+static mavc_t * mavc_get_instance(void)
+{
+    static mavc_t instance = {
+        .m_current_call_id = -1,
+    };
+    return &instance;
+}
+
+static void mavc_on_incoming_call(const void * call)
+{
+    const pjapp_call_t * call_info = (const pjapp_call_t *) call;
+    mavc_json_exec_1(pjapp_call_t, call_info, content,
+        mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_BINARY_CONTENT,
+            MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
+            NULL, MSG_MAVC_INCOMING_CALL, 0, 0, content, strlen(content)));
+}
+
+static void mavc_on_call_outgoing(const void * call)
+{
+    const pjapp_call_t * call_info = (const pjapp_call_t *) call;
+    mavc_get_instance()->m_current_call_id = call_info->m_call_id;
+    mavc_json_exec_1(pjapp_call_t, call_info, content,
+        mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_BINARY_CONTENT,
+            MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
+            NULL, MSG_MAVC_CALL_OUTGOING, 0, 0, content, strlen(content)));
+}
+
 static mt_status_t module_load(mtool_module *module)
 {
+    pjapp_config_t config;
+    pjapp_config_init(&config);
+    config.m_account_configs.m_n_accounts = 0;
+    config.m_transport_configs.m_flags |= PJAPP_TP_UDP;
+    config.m_cbs_configs.m_cbs.on_incoming_call = mavc_on_incoming_call;
+    config.m_cbs_configs.m_cbs.on_call_outgoing = mavc_on_call_outgoing;
+    pjapp_init(&config);
     return MT_SUCCESS;
 }
 
 static mt_status_t module_start(mtool_module *module)
 {
+    pjapp_start();
     return MT_SUCCESS;
 }
 
@@ -44,6 +96,19 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
                     NULL, message->modid_dst, NULL, message->modid_src,
                     NULL, MSG_XXX_HUB_HEARTBEAT_ACK, 0, 0, NULL, 0);
         break;
+        case MSG_MAVC_MAKE_CALL: {
+            char * uri = (char *) content;
+            pjapp_make_call(uri, 3000, NULL);
+            break;
+        }
+        case MSG_MAVC_ACCEPT_CALL: {
+            pjapp_accept_call(mavc_get_instance()->m_current_call_id);
+            break;
+        }
+        case MSG_MAVC_HANGUP_CALL: {
+            pjapp_hangup_call(mavc_get_instance()->m_current_call_id);
+            break;
+        }
         default:
             status = MT_EUNKNOWN;
         break;

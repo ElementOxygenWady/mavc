@@ -96,7 +96,7 @@ set(STRICT_OPTIONS_CXX "")
 list(APPEND STRICT_OPTIONS_CPP
     "-Wall"
     "-Wcast-align"
-    "-Wconversion"
+    # "-Wconversion"
     "-Werror=return-type"
     "-Wfloat-equal"
     "-Winit-self"
@@ -207,6 +207,28 @@ if(NOT CJSON_LIBRARIES)
 endif()
 list(APPEND COMMON_LIBS "${CJSON_LIBRARY}")
 list(APPEND COMMON_INCLUDE_DIRS "${CJSON_INCLUDE_DIRS}")
+
+find_package(Pjutil)
+if (NOT PJUTIL_FOUND)
+    message(FATAL_ERROR "Missing Pjutil, please compile it first.")
+endif()
+
+find_package(Pjlib)
+if (NOT PJLIB_FOUND)
+    message(FATAL_ERROR "Missing Pjlib, please compile it first.")
+endif()
+
+find_package(Pjsip)
+if (NOT PJSIP_FOUND)
+    message(FATAL_ERROR "Missing Pjsip, please compile it first.")
+endif()
+
+find_package(PJApp)
+if(NOT PJAPP_LIBRARIES)
+    message(FATAL_ERROR "Missing Pjapp, please compile it first.")
+endif()
+list(APPEND COMMON_LIBS "${PJAPP_LIBRARIES}")
+list(APPEND COMMON_INCLUDE_DIRS "${PJAPP_INCLUDE_DIRS}")
 
 list(REMOVE_DUPLICATES COMMON_LIBS)
 list(REMOVE_DUPLICATES COMMON_INCLUDE_DIRS)

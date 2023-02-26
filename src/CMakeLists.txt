@@ -5,6 +5,7 @@ set(LIBRARY_NAME "${PROJECT_NAME_LOWER}")
 
 set(SOURCE_FILES_C
     mavc_core.c
+    mavc_json.c
 )
 
 set(LIBS
