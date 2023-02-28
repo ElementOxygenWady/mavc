@@ -194,11 +194,14 @@ int main(int argc, char *argv[], char *env[])
         char ch = getchar();
         switch (ch)
         {
-            case 'm':  // Make call
-                mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_BINARY_CONTENT,
+            case 'm': {  // Make call
+                char content[64] = {0};
+                snprintf(content, sizeof(content), "{\"user_name\": \"MAVCTester\", \"remote_host\": \"" CALL_IP "\"}");
+                mt_status_t rc = mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
                     MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
-                    NULL, MSG_MAVC_MAKE_CALL, 0, 0, CALL_IP, strlen(CALL_IP));
+                    NULL, MSG_MAVC_MAKE_CALL, 0, 0, content, strlen(content));
                 break;
+            }
         }
     }
 

@@ -3,11 +3,12 @@
 
 /**
  * @file
- * @brief PJ Application
+ * @brief Module avc core
  *
  * No more details!
  */
 
+#include "mavc_comm_objects.h"
 #include <pjapp/pjapp.h>
 #include <cjson/cJSON.h>
 
@@ -32,6 +33,14 @@ extern "C" {
 
 
 char * mavc_json_pjapp_call_t_2_json_obj(const pjapp_call_t * call);
+
+
+#define mavc_json_cast_1(type, json_str, dst_obj) do { \
+    mavc_json_json_obj_2_##type(json_str, dst_obj); \
+} while (0)
+
+
+void mavc_json_json_obj_2_mavc_make_call_t(const char * json_str, mavc_make_call_t * call);
 
 /**
  * @}

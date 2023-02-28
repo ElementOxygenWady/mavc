@@ -7,6 +7,7 @@
 
 #include "private.h"
 #include "mavc_json.h"
+#include "mavc_comm_objects.h"
 #include <e2str/e2str_module_message.h>
 #include <pjapp/pjapp.h>
 
@@ -43,7 +44,7 @@ static void mavc_on_incoming_call(const void * call)
 {
     const pjapp_call_t * call_info = (const pjapp_call_t *) call;
     mavc_json_exec_1(pjapp_call_t, call_info, content,
-        mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_BINARY_CONTENT,
+        mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
             MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
             NULL, MSG_MAVC_INCOMING_CALL, 0, 0, content, strlen(content)));
 }
@@ -53,7 +54,7 @@ static void mavc_on_call_outgoing(const void * call)
     const pjapp_call_t * call_info = (const pjapp_call_t *) call;
     mavc_get_instance()->m_current_call_id = call_info->m_call_id;
     mavc_json_exec_1(pjapp_call_t, call_info, content,
-        mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_BINARY_CONTENT,
+        mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
             MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
             NULL, MSG_MAVC_CALL_OUTGOING, 0, 0, content, strlen(content)));
 }
@@ -97,8 +98,13 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
                     NULL, MSG_XXX_HUB_HEARTBEAT_ACK, 0, 0, NULL, 0);
         break;
         case MSG_MAVC_MAKE_CALL: {
-            char * uri = (char *) content;
-            pjapp_make_call(uri, 3000, NULL);
+            mavc_make_call_t call_data;
+            mavc_json_cast_1(mavc_make_call_t, (char *) content, &call_data);
+            char url[64];
+            snprintf(url, sizeof(url), "sip:%s@%s",
+                strlen(call_data.user_name) > 0 ? call_data.user_name : "MAVC",
+                call_data.remote_host);
+            pjapp_make_call_v2(url, 3000, NULL);
             break;
         }
         case MSG_MAVC_ACCEPT_CALL: {
