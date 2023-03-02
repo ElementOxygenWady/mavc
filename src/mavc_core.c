@@ -18,7 +18,7 @@
 
 #define LOG_TAG                 "CORE" //日志标签
 
-#define UI_MODULE MTOOL_MODULE_AVC_NAME ".T"
+#define UI_MODULE MTOOL_MODULE_GUI_NAME
 
 
 struct mavc_t;
