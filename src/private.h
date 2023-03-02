@@ -56,6 +56,18 @@ extern "C" {
     #define MAVC_LOGX(TAG, P, Q...)                             printf("*/" MAVC_LOG_LABEL ": [" TAG "] " P DEF_WRAP, ##Q)
 #endif
 
+
+#ifdef LOG_DEBUG
+#ifndef LOG_TAG
+#define LOG_TAG "MAVC_PRI"
+#endif
+#define LOG_TAG_DEBUG LOG_TAG ".Debug"
+#define ASSERT_BREAK(cond) if (!(cond)) { MAVC_LOGE(LOG_TAG_DEBUG, "Error assertion: %s", #cond); break; }
+#else
+#define ASSERT_BREAK(cond) if (!(cond)) break
+#endif
+
+
 /**
  * @}
  */

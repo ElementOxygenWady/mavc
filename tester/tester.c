@@ -18,7 +18,7 @@
 
 #define LOG_TAG                 "TESTER" //日志标签
 
-#define MODULE_NAME MTOOL_MODULE_AVC_NAME ".T"
+#define MODULE_NAME MTOOL_MODULE_GUI_NAME
 #define CALL_IP "192.168.31.142"
 
 
@@ -52,6 +52,10 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
                     NULL, message->modid_dst, NULL, message->modid_src,
                     NULL, MSG_XXX_HUB_HEARTBEAT_ACK, 0, 0, NULL, 0);
         break;
+        case MSG_MAVC_INCOMING_CALL: {
+            MAVC_LOGI(LOG_TAG, "Recv MSG_MAVC_INCOMING_CALL: %s", (char *) content);
+            break;
+        }
         default:
             status = MT_EUNKNOWN;
         break;

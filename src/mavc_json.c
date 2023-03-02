@@ -33,8 +33,18 @@ char * mavc_json_pjapp_call_t_2_json_obj(const pjapp_call_t * call)
     return str;
 }
 
+char * mavc_json_mavc_call_t_2_json_obj(const mavc_call_t * call)
+{
+    cJSON * obj = cJSON_CreateObject();
+    cJSON_AddStringToObject(obj, "user_name", call->user_name);
+    cJSON_AddStringToObject(obj, "remote_host", call->remote_host);
+    char * str = cJSON_PrintUnformatted(obj);
+    cJSON_Delete(obj);
+    return str;
+}
 
-void mavc_json_json_obj_2_mavc_make_call_t(const char * json_str, mavc_make_call_t * call)
+
+void mavc_json_json_obj_2_mavc_call_t(const char * json_str, mavc_call_t * call)
 {
     cJSON * obj = cJSON_Parse(json_str);
     if (NULL != obj)

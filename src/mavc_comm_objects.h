@@ -18,11 +18,11 @@ extern "C" {
  * @{
  */
 
-typedef struct mavc_make_call_t
+typedef struct mavc_call_t
 {
     char user_name[16];
     char remote_host[32];
-} mavc_make_call_t;
+} mavc_call_t;
 
 /**
  * @}
