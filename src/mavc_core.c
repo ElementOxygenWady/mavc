@@ -32,82 +32,118 @@ static int mavc_extract_info_from_url(const char * url,
     char * remote_user_name, unsigned remote_user_name_size,
     char * remote_host, unsigned remote_host_size)
 {
+    unsigned n_chars = strlen(url);
     int ret = -1;
-    unsigned offset = 0;
-    const unsigned n_expect_extracts = 2;
-    unsigned n_expect_meets = 0;
-    do {
-        unsigned url_len = strlen(url);
-        ASSERT_BREAK(url_len > 5);
-        ASSERT_BREAK(0 == strncmp(url, "sip:", 4));
-        offset = 4;
-        int do_continue = 1;
-        unsigned i = offset;
-        for (; i < url_len && 0 != do_continue; ++i)
+    for (unsigned i = 0; i < n_chars - 4; ++i)
+    {
+        if ('s' != url[i] ||  // Check one char first to avoid string comparision each time.
+            0 != strncmp(url + i, "sip:", 4))
         {
-            switch (url[i])
+            continue;
+        }
+        unsigned offset = 0;
+        const unsigned n_expect_extracts = 2;
+        unsigned n_expect_meets = 0;
+
+        offset = i + 4;  // sip:
+        int do_continue = 1;
+        unsigned j = offset;
+
+        // Remote host is always exists
+        char * dst = remote_host;
+        unsigned dst_size = remote_host_size;
+        memset(dst, 0, dst_size);
+
+        for (; j < n_chars && 0 != do_continue; ++j)
+        {
+            switch (url[j])
             {
-                case '@': {
-                    if (0 != n_expect_meets ||  // Username does not in correct position.
-                        i <= offset)  // Zero length of username.
+                case '@': {  // Meaning that the url contains a username
+                    if (dst != remote_host)
+                    {
+                        // Already extract other information, WRONG!!, the username should be the first information.
+                        do_continue = 0;
+                        break;
+                    }
+                    if (j <= offset + 1)  // Zero length of username
                     {
                         do_continue = 0;
                         break;
                     }
-                    unsigned user_name_len = i - offset + 1;  // +1 to include '\0'.
-                    if (user_name_len > remote_user_name_size)
+                    dst = remote_user_name;
+                    dst_size = remote_user_name_size;
+                    unsigned user_name_len = j - offset + 1;  // +1 to include '\0'.
+                    if (user_name_len > dst_size)
                     {
-                        user_name_len = remote_user_name_size;
+                        user_name_len = dst_size;
                     }
-                    strncpy(remote_user_name, url + offset, user_name_len - 1);
-                    remote_user_name[user_name_len - 1] = '\0';
-                    offset = i + 1;
-                    ++n_expect_meets;
+                    strncpy(dst, url + offset, user_name_len - 1);
+                    dst[user_name_len - 1] = '\0';
+                    offset = j + 1;
+                    dst = remote_host;
+                    dst_size = remote_host_size;
                     break;
                 }
+                case ':': {  // Maybe the transport after.
+                    // [[ Fall-through ]]
+                }
+                case '>':
+                case '\'':
                 case ' ':
                 case '\t':
                 case '\r':
                 case '\n': {
-                    if (i > offset &&
-                        1 == n_expect_meets)  // Host is in second position.
+                    if (strlen(dst) > 0)  // Already set
                     {
-                        unsigned host_len = i - offset + 1;  // +1 to include '\0'.
-                        if (host_len > remote_host_size)
-                        {
-                            host_len = remote_host_size;
-                        }
-                        strncpy(remote_host, url + offset, host_len - 1);
-                        remote_host[host_len - 1] = '\0';
-                        offset = i;
-                        ++n_expect_meets;
+                        do_continue = 0;
+                        break;
                     }
+                    unsigned dst_len = j - offset + 1;  // +1 to include '\0'.
+                    if (dst_len > dst_size)
+                    {
+                        dst_len = dst_size;
+                    }
+                    strncpy(dst, url + offset, dst_len - 1);
+                    dst[dst_len - 1] = '\0';
+                    offset = j + 1;
                     do_continue = 0;
                     break;
                 }
             }
         }
-        ASSERT_BREAK(n_expect_meets >= n_expect_extracts ||
-            (do_continue &&
-                1 == n_expect_meets));  // Must meet and only meet username.
-        if (n_expect_meets < n_expect_extracts)
+        if (0 == do_continue && 0 == strlen(remote_host))
         {
-            if (i > (offset + 1))  // +1 to ignore '\0'.
-            {
-                unsigned host_len = i - offset + 1;  // +1 to include '\0'.
-                if (host_len > remote_host_size)
-                {
-                    host_len = remote_host_size;
-                }
-                strncpy(remote_host, url + offset, host_len - 1);
-                remote_host[host_len - 1] = '\0';
-                offset = i;
-                ++n_expect_meets;
-            }
+            // Something wrong, try to extract the informations from the remain of the url.
+            continue;
         }
-        ASSERT_BREAK(n_expect_extracts == n_expect_meets);
-        ret = 0;
-    } while (0);
+        if (do_continue)  // Meet the '\0' char
+        {
+            if (dst == remote_host)  // +1 to ignore '\0'.
+            {
+                if (j <= offset)  // Zero length of remote host, WRONG!!
+                {
+                    continue;
+                }
+                unsigned dst_len = j - offset + 1;  // +1 to include '\0'.
+                if (dst_len > dst_size)
+                {
+                    dst_len = dst_size;
+                }
+                strncpy(dst, url + offset, dst_len - 1);
+                dst[dst_len - 1] = '\0';
+                ret = 0;
+                break;
+            }
+        } else
+        {
+            ret = 0;
+        }
+    }
+    if (0 != ret)
+    {
+        memset(remote_user_name, 0, remote_user_name_size);
+        memset(remote_host, 0, remote_host_size);
+    }
     return ret;
 }
 
