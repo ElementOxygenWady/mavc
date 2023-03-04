@@ -238,9 +238,13 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
             mavc_call_t call_data;
             mavc_json_cast_1(mavc_call_t, (char *) content, &call_data);
             char url[64];
-            snprintf(url, sizeof(url), "sip:%s@%s",
-                strlen(call_data.user_name) > 0 ? call_data.user_name : "MAVC",
-                call_data.remote_host);
+            if (strlen(call_data.user_name) > 0)
+            {
+                snprintf(url, sizeof(url), "sip:%s@%s", call_data.user_name, call_data.remote_host);
+            } else
+            {
+                snprintf(url, sizeof(url), "sip:%s", call_data.remote_host);
+            }
             pjapp_make_call_v2(url, 3000, NULL);
             break;
         }
