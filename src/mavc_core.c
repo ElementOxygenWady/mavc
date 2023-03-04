@@ -27,20 +27,6 @@ struct mavc_t;
 typedef struct mavc_t mavc_t;
 
 
-struct mavc_t
-{
-    int m_current_call_id;
-};
-
-
-static mavc_t * mavc_get_instance(void)
-{
-    static mavc_t instance = {
-        .m_current_call_id = -1,
-    };
-    return &instance;
-}
-
 // Internal call, assert all of the parameters is valid.
 static int mavc_extract_info_from_url(const char * url,
     char * remote_user_name, unsigned remote_user_name_size,
@@ -133,6 +119,7 @@ static void mavc_on_incoming_call(const void * call)
         call_obj.user_name, sizeof(call_obj.user_name),
         call_obj.remote_host, sizeof(call_obj.remote_host)))
     {
+        call_obj.id = call_info->m_call_id;
         mavc_json_exec_1(mavc_call_t, &call_obj, content,
             mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
                 MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
@@ -143,11 +130,33 @@ static void mavc_on_incoming_call(const void * call)
 static void mavc_on_call_outgoing(const void * call)
 {
     const pjapp_call_t * call_info = (const pjapp_call_t *) call;
-    mavc_get_instance()->m_current_call_id = call_info->m_call_id;
-    mavc_json_exec_1(pjapp_call_t, call_info, content,
-        mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
-            MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
-            NULL, MSG_MAVC_CALL_OUTGOING, 0, 0, content, strlen(content)));
+    mavc_call_t call_obj;
+    if (0 == mavc_extract_info_from_url(call_info->m_remote_url,
+        call_obj.user_name, sizeof(call_obj.user_name),
+        call_obj.remote_host, sizeof(call_obj.remote_host)))
+    {
+        call_obj.id = call_info->m_call_id;
+        mavc_json_exec_1(mavc_call_t, &call_obj, content,
+            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+                MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
+                NULL, MSG_MAVC_CALL_OUTGOING, 0, 0, content, strlen(content)));
+    }
+}
+
+static void mavc_on_call_confirmed(const void * call)
+{
+    const pjapp_call_t * call_info = (const pjapp_call_t *) call;
+    mavc_call_t call_obj;
+    if (0 == mavc_extract_info_from_url(call_info->m_remote_url,
+        call_obj.user_name, sizeof(call_obj.user_name),
+        call_obj.remote_host, sizeof(call_obj.remote_host)))
+    {
+        call_obj.id = call_info->m_call_id;
+        mavc_json_exec_1(mavc_call_t, &call_obj, content,
+            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+                MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
+                NULL, MSG_MAVC_CALL_CONFIRMED, 0, 0, content, strlen(content)));
+    }
 }
 
 static mt_status_t module_load(mtool_module *module)
@@ -158,6 +167,7 @@ static mt_status_t module_load(mtool_module *module)
     config.m_transport_configs.m_flags |= PJAPP_TP_UDP;
     config.m_cbs_configs.m_cbs.on_incoming_call = mavc_on_incoming_call;
     config.m_cbs_configs.m_cbs.on_call_outgoing = mavc_on_call_outgoing;
+    config.m_cbs_configs.m_cbs.on_call_confirmed = mavc_on_call_confirmed;
     pjapp_init(&config);
     return MT_SUCCESS;
 }
@@ -199,11 +209,27 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
             break;
         }
         case MSG_MAVC_ACCEPT_CALL: {
-            pjapp_accept_call(mavc_get_instance()->m_current_call_id);
+            mavc_call_t call_data;
+            mavc_json_cast_1(mavc_call_t, (char *) content, &call_data);
+            pjapp_accept_call(call_data.id);
             break;
         }
         case MSG_MAVC_HANGUP_CALL: {
-            pjapp_hangup_call(mavc_get_instance()->m_current_call_id);
+            mavc_call_t call_data;
+            mavc_json_cast_1(mavc_call_t, (char *) content, &call_data);
+            pjapp_hangup_call(call_data.id);
+            break;
+        }
+        case MSG_MAVC_REJECT_CALL: {
+            mavc_call_t call_data;
+            mavc_json_cast_1(mavc_call_t, (char *) content, &call_data);
+            pjapp_reject_call(call_data.id);
+            break;
+        }
+        case MSG_MAVC_CANCEL_MAKE_CALL: {
+            mavc_call_t call_data;
+            mavc_json_cast_1(mavc_call_t, (char *) content, &call_data);
+            pjapp_cancel_call(call_data.id);
             break;
         }
         default:

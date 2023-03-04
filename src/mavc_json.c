@@ -18,24 +18,33 @@
 
 
 #define json_str_obj_2_char_arr(json_obj, key, char_arr) do { \
-    const char * value = cJSON_GetStringValue(cJSON_GetObjectItem(json_obj, key)); \
-    snprintf(char_arr, sizeof(char_arr), "%s", NULL == value ? "" : value); \
+    cJSON * obj_ = cJSON_GetObjectItem(json_obj, key); \
+    if (NULL != obj_) \
+    { \
+        const char * value = cJSON_GetStringValue(obj_); \
+        snprintf(char_arr, sizeof(char_arr), "%s", NULL == value ? "" : value); \
+    } else \
+    { \
+        memset(char_arr, 0, sizeof(char_arr)); \
+    } \
 } while (0)
 
+#define json_get_number(json_obj, key, val, def_val, type) do { \
+    cJSON * obj_ = cJSON_GetObjectItem(json_obj, key); \
+    if (NULL != obj_) \
+    { \
+        val = (type) cJSON_GetNumberValue(obj_); \
+    } else \
+    { \
+        val = def_val; \
+    } \
+} while (0)
 
-char * mavc_json_pjapp_call_t_2_json_obj(const pjapp_call_t * call)
-{
-    cJSON * obj = cJSON_CreateObject();
-    cJSON_AddNumberToObject(obj, "call_id", call->m_call_id);
-    cJSON_AddStringToObject(obj, "remote_url", call->m_remote_url);
-    char * str = cJSON_PrintUnformatted(obj);
-    cJSON_Delete(obj);
-    return str;
-}
 
 char * mavc_json_mavc_call_t_2_json_obj(const mavc_call_t * call)
 {
     cJSON * obj = cJSON_CreateObject();
+    cJSON_AddNumberToObject(obj, "id", call->id);
     cJSON_AddStringToObject(obj, "user_name", call->user_name);
     cJSON_AddStringToObject(obj, "remote_host", call->remote_host);
     char * str = cJSON_PrintUnformatted(obj);
@@ -49,6 +58,7 @@ void mavc_json_json_obj_2_mavc_call_t(const char * json_str, mavc_call_t * call)
     cJSON * obj = cJSON_Parse(json_str);
     if (NULL != obj)
     {
+        json_get_number(obj, "id", call->id, -1, int);
         json_str_obj_2_char_arr(obj, "user_name", call->user_name);
         json_str_obj_2_char_arr(obj, "remote_host", call->remote_host);
         cJSON_Delete(obj);

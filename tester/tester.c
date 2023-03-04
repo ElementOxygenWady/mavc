@@ -10,6 +10,7 @@
 #include "../src/private.h"
 #include "mavc/mavc.h"
 #include <e2str/e2str_module_message.h>
+#include <cjson/cJSON.h>
 
 /**
  * @addtogroup TESTER_FILES All tester files
@@ -20,6 +21,9 @@
 
 #define MODULE_NAME MTOOL_MODULE_GUI_NAME
 #define CALL_IP "192.168.31.142"
+// #define CALL_IP "192.168.31.90"
+
+static int g_call_id = -1;
 
 
 static mt_status_t module_load(mtool_module *module)
@@ -54,6 +58,20 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
         break;
         case MSG_MAVC_INCOMING_CALL: {
             MAVC_LOGI(LOG_TAG, "Recv MSG_MAVC_INCOMING_CALL: %s", (char *) content);
+            cJSON * obj = cJSON_Parse((char *) content);
+            g_call_id = (int) cJSON_GetNumberValue(cJSON_GetObjectItem(obj, "id"));
+            cJSON_Delete(obj);
+            break;
+        }
+        case MSG_MAVC_CALL_OUTGOING: {
+            MAVC_LOGI(LOG_TAG, "Recv MSG_MAVC_CALL_OUTGOING: %s", (char *) content);
+            cJSON * obj = cJSON_Parse((char *) content);
+            g_call_id = (int) cJSON_GetNumberValue(cJSON_GetObjectItem(obj, "id"));
+            cJSON_Delete(obj);
+            break;
+        }
+        case MSG_MAVC_CALL_CONFIRMED: {
+            MAVC_LOGI(LOG_TAG, "Recv MSG_MAVC_CALL_CONFIRMED: %s", (char *) content);
             break;
         }
         default:
@@ -204,6 +222,38 @@ int main(int argc, char *argv[], char *env[])
                 mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
                     MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
                     NULL, MSG_MAVC_MAKE_CALL, 0, 0, content, strlen(content));
+                break;
+            }
+            case 'a': {  // Accept call
+                char content[64] = {0};
+                snprintf(content, sizeof(content), "{\"id\": %d}", g_call_id);
+                mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_BINARY_CONTENT,
+                    MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
+                    NULL, MSG_MAVC_ACCEPT_CALL, 0, 0, content, strlen(content));
+                break;
+            }
+            case 'h': {  // Hangup call
+                char content[64] = {0};
+                snprintf(content, sizeof(content), "{\"id\": %d}", g_call_id);
+                mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_BINARY_CONTENT,
+                    MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
+                    NULL, MSG_MAVC_HANGUP_CALL, 0, 0, content, strlen(content));
+                break;
+            }
+            case 'c': {  // Reject call
+                char content[64] = {0};
+                snprintf(content, sizeof(content), "{\"id\": %d}", g_call_id);
+                mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_BINARY_CONTENT,
+                    MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
+                    NULL, MSG_MAVC_CANCEL_MAKE_CALL, 0, 0, content, strlen(content));
+                break;
+            }
+            case 'r': {  // Cancel call
+                char content[64] = {0};
+                snprintf(content, sizeof(content), "{\"id\": %d}", g_call_id);
+                mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_BINARY_CONTENT,
+                    MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
+                    NULL, MSG_MAVC_REJECT_CALL, 0, 0, content, strlen(content));
                 break;
             }
         }

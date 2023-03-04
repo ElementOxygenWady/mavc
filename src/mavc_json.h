@@ -32,8 +32,6 @@ extern "C" {
 } while (0)
 
 
-char * mavc_json_pjapp_call_t_2_json_obj(const pjapp_call_t * call);
-
 char * mavc_json_mavc_call_t_2_json_obj(const mavc_call_t * call);
 
 

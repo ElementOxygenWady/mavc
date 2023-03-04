@@ -20,6 +20,7 @@ extern "C" {
 
 typedef struct mavc_call_t
 {
+    int id;
     char user_name[16];
     char remote_host[32];
 } mavc_call_t;
