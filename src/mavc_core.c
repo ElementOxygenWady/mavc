@@ -42,8 +42,6 @@ static int mavc_extract_info_from_url(const char * url,
             continue;
         }
         unsigned offset = 0;
-        const unsigned n_expect_extracts = 2;
-        unsigned n_expect_meets = 0;
 
         offset = i + 4;  // sip:
         int do_continue = 1;
