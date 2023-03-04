@@ -78,6 +78,14 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
             MAVC_LOGI(LOG_TAG, "Recv MSG_MAVC_CALL_DISCONNECTED: %s", (char *) content);
             break;
         }
+        case MSG_MAVC_CALL_CANCELLED: {
+            MAVC_LOGI(LOG_TAG, "Recv MSG_MAVC_CALL_CANCELLED: %s", (char *) content);
+            break;
+        }
+        case MSG_MAVC_CALL_REJECTED: {
+            MAVC_LOGI(LOG_TAG, "Recv MSG_MAVC_CALL_REJECTED: %s", (char *) content);
+            break;
+        }
         default:
             status = MT_EUNKNOWN;
         break;

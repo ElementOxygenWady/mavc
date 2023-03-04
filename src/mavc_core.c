@@ -209,6 +209,38 @@ static void mavc_on_call_disconnected(const void * call)
     }
 }
 
+static void mavc_on_call_cancelled(const void * call)
+{
+    const pjapp_call_t * call_info = (const pjapp_call_t *) call;
+    mavc_call_t call_obj;
+    if (0 == mavc_extract_info_from_url(call_info->m_remote_url,
+        call_obj.user_name, sizeof(call_obj.user_name),
+        call_obj.remote_host, sizeof(call_obj.remote_host)))
+    {
+        call_obj.id = call_info->m_call_id;
+        mavc_json_exec_1(mavc_call_t, &call_obj, content,
+            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+                MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
+                NULL, MSG_MAVC_CALL_CANCELLED, 0, 0, content, strlen(content)));
+    }
+}
+
+static void mavc_on_call_rejected(const void * call)
+{
+    const pjapp_call_t * call_info = (const pjapp_call_t *) call;
+    mavc_call_t call_obj;
+    if (0 == mavc_extract_info_from_url(call_info->m_remote_url,
+        call_obj.user_name, sizeof(call_obj.user_name),
+        call_obj.remote_host, sizeof(call_obj.remote_host)))
+    {
+        call_obj.id = call_info->m_call_id;
+        mavc_json_exec_1(mavc_call_t, &call_obj, content,
+            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+                MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
+                NULL, MSG_MAVC_CALL_REJECTED, 0, 0, content, strlen(content)));
+    }
+}
+
 static mt_status_t module_load(mtool_module *module)
 {
     pjapp_config_t config;
@@ -219,6 +251,8 @@ static mt_status_t module_load(mtool_module *module)
     config.m_cbs_configs.m_cbs.on_call_outgoing = mavc_on_call_outgoing;
     config.m_cbs_configs.m_cbs.on_call_confirmed = mavc_on_call_confirmed;
     config.m_cbs_configs.m_cbs.on_call_disconnected = mavc_on_call_disconnected;
+    config.m_cbs_configs.m_cbs.on_call_cancelled = mavc_on_call_cancelled;
+    config.m_cbs_configs.m_cbs.on_call_rejected = mavc_on_call_rejected;
     pjapp_init(&config);
     return MT_SUCCESS;
 }
@@ -260,7 +294,7 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
             {
                 snprintf(url, sizeof(url), "sip:%s", call_data.remote_host);
             }
-            pjapp_make_call_v2(url, 3000, NULL);
+            pjapp_make_call_v2(url, 0, NULL);
             break;
         }
         case MSG_MAVC_ACCEPT_CALL: {
