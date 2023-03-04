@@ -63,7 +63,7 @@ static int mavc_extract_info_from_url(const char * url,
                         do_continue = 0;
                         break;
                     }
-                    if (j <= offset + 1)  // Zero length of username
+                    if (j <= offset)  // Zero length of username
                     {
                         do_continue = 0;
                         break;
