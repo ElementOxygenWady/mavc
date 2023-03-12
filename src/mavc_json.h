@@ -34,6 +34,10 @@ extern "C" {
 
 char * mavc_json_mavc_call_t_2_json_obj(const mavc_call_t * call);
 
+char * mavc_json_mavc_audio_file_ack_t_2_json_obj(const mavc_audio_file_ack_t * ack);
+
+char * mavc_json_mavc_audio_eof_t_2_json_obj(const mavc_audio_eof_t * audio_eof);
+
 
 #define mavc_json_cast_1(type, json_str, dst_obj) do { \
     mavc_json_json_obj_2_##type(json_str, dst_obj); \
@@ -41,6 +45,10 @@ char * mavc_json_mavc_call_t_2_json_obj(const mavc_call_t * call);
 
 
 void mavc_json_json_obj_2_mavc_call_t(const char * json_str, mavc_call_t * call);
+
+void mavc_json_json_obj_2_mavc_audio_file_t(const char * json_str, mavc_audio_file_t * audio_file);
+
+void mavc_json_json_obj_2_mavc_audio_volume_t(const char * json_str, mavc_audio_volume_t * audio_volume);
 
 /**
  * @}

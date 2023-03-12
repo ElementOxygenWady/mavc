@@ -27,239 +27,106 @@ struct mavc_t;
 typedef struct mavc_t mavc_t;
 
 
-// Internal call, assert all of the parameters is valid.
-static int mavc_extract_info_from_url(const char * url,
-    char * remote_user_name, unsigned remote_user_name_size,
-    char * remote_host, unsigned remote_host_size)
-{
-    unsigned n_chars = strlen(url);
-    int ret = -1;
-    for (unsigned i = 0; i < n_chars - 4; ++i)
-    {
-        if ('s' != url[i] ||  // Check one char first to avoid string comparision each time.
-            0 != strncmp(url + i, "sip:", 4))
-        {
-            continue;
-        }
-        unsigned offset = 0;
-
-        offset = i + 4;  // sip:
-        int do_continue = 1;
-        unsigned j = offset;
-
-        // Remote host is always exists
-        char * dst = remote_host;
-        unsigned dst_size = remote_host_size;
-        memset(dst, 0, dst_size);
-
-        for (; j < n_chars && 0 != do_continue; ++j)
-        {
-            switch (url[j])
-            {
-                case '@': {  // Meaning that the url contains a username
-                    if (dst != remote_host)
-                    {
-                        // Already extract other information, WRONG!!, the username should be the first information.
-                        do_continue = 0;
-                        break;
-                    }
-                    if (j <= offset)  // Zero length of username
-                    {
-                        do_continue = 0;
-                        break;
-                    }
-                    dst = remote_user_name;
-                    dst_size = remote_user_name_size;
-                    unsigned user_name_len = j - offset + 1;  // +1 to include '\0'.
-                    if (user_name_len > dst_size)
-                    {
-                        user_name_len = dst_size;
-                    }
-                    strncpy(dst, url + offset, user_name_len - 1);
-                    dst[user_name_len - 1] = '\0';
-                    offset = j + 1;
-                    dst = remote_host;
-                    dst_size = remote_host_size;
-                    break;
-                }
-                case ':': {  // Maybe the transport after.
-                    // [[ Fall-through ]]
-                }
-                case '>':
-                case '\'':
-                case ' ':
-                case '\t':
-                case '\r':
-                case '\n': {
-                    if (strlen(dst) > 0)  // Already set
-                    {
-                        do_continue = 0;
-                        break;
-                    }
-                    unsigned dst_len = j - offset + 1;  // +1 to include '\0'.
-                    if (dst_len > dst_size)
-                    {
-                        dst_len = dst_size;
-                    }
-                    strncpy(dst, url + offset, dst_len - 1);
-                    dst[dst_len - 1] = '\0';
-                    offset = j + 1;
-                    do_continue = 0;
-                    break;
-                }
-            }
-        }
-        if (0 == do_continue && 0 == strlen(remote_host))
-        {
-            // Something wrong, try to extract the informations from the remain of the url.
-            continue;
-        }
-        if (do_continue)  // Meet the '\0' char
-        {
-            if (dst == remote_host)  // +1 to ignore '\0'.
-            {
-                if (j <= offset)  // Zero length of remote host, WRONG!!
-                {
-                    continue;
-                }
-                unsigned dst_len = j - offset + 1;  // +1 to include '\0'.
-                if (dst_len > dst_size)
-                {
-                    dst_len = dst_size;
-                }
-                strncpy(dst, url + offset, dst_len - 1);
-                dst[dst_len - 1] = '\0';
-                ret = 0;
-                break;
-            }
-        } else
-        {
-            ret = 0;
-        }
-    }
-    if (0 != ret)
-    {
-        memset(remote_user_name, 0, remote_user_name_size);
-        memset(remote_host, 0, remote_host_size);
-    }
-    return ret;
-}
-
 static void mavc_on_incoming_call(const void * call)
 {
     const pjapp_call_t * call_info = (const pjapp_call_t *) call;
-    mavc_call_t call_obj;
-    if (0 == mavc_extract_info_from_url(call_info->m_remote_url,
-        call_obj.user_name, sizeof(call_obj.user_name),
-        call_obj.remote_host, sizeof(call_obj.remote_host)))
-    {
-        call_obj.id = call_info->m_call_id;
-        mavc_json_exec_1(mavc_call_t, &call_obj, content,
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
-                MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
-                NULL, MSG_MAVC_INCOMING_CALL, 0, 0, content, strlen(content)));
-    }
+    mavc_call_t call_obj = { .id = call_info->m_call_id };
+    snprintf(call_obj.user_name, sizeof(call_obj.user_name), "%s", call_info->m_remote_username);
+    snprintf(call_obj.remote_host, sizeof(call_obj.remote_host), "%s", call_info->m_remote_host);
+    mavc_json_exec_1(mavc_call_t, &call_obj, content,
+        mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+            MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
+            NULL, MSG_MAVC_INCOMING_CALL, 0, 0, content, strlen(content)));
 }
 
 static void mavc_on_call_outgoing(const void * call)
 {
     const pjapp_call_t * call_info = (const pjapp_call_t *) call;
-    mavc_call_t call_obj;
-    if (0 == mavc_extract_info_from_url(call_info->m_remote_url,
-        call_obj.user_name, sizeof(call_obj.user_name),
-        call_obj.remote_host, sizeof(call_obj.remote_host)))
-    {
-        call_obj.id = call_info->m_call_id;
-        mavc_json_exec_1(mavc_call_t, &call_obj, content,
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
-                MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
-                NULL, MSG_MAVC_CALL_OUTGOING, 0, 0, content, strlen(content)));
-    }
+    mavc_call_t call_obj = { .id = call_info->m_call_id };
+    snprintf(call_obj.user_name, sizeof(call_obj.user_name), "%s", call_info->m_remote_username);
+    snprintf(call_obj.remote_host, sizeof(call_obj.remote_host), "%s", call_info->m_remote_host);
+    mavc_json_exec_1(mavc_call_t, &call_obj, content,
+        mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+            MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
+            NULL, MSG_MAVC_CALL_OUTGOING, 0, 0, content, strlen(content)));
 }
 
 static void mavc_on_call_confirmed(const void * call)
 {
     const pjapp_call_t * call_info = (const pjapp_call_t *) call;
-    mavc_call_t call_obj;
-    if (0 == mavc_extract_info_from_url(call_info->m_remote_url,
-        call_obj.user_name, sizeof(call_obj.user_name),
-        call_obj.remote_host, sizeof(call_obj.remote_host)))
-    {
-        call_obj.id = call_info->m_call_id;
-        mavc_json_exec_1(mavc_call_t, &call_obj, content,
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
-                MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
-                NULL, MSG_MAVC_CALL_CONFIRMED, 0, 0, content, strlen(content)));
-    }
+    mavc_call_t call_obj = { .id = call_info->m_call_id };
+    snprintf(call_obj.user_name, sizeof(call_obj.user_name), "%s", call_info->m_remote_username);
+    snprintf(call_obj.remote_host, sizeof(call_obj.remote_host), "%s", call_info->m_remote_host);
+    mavc_json_exec_1(mavc_call_t, &call_obj, content,
+        mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+            MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
+            NULL, MSG_MAVC_CALL_CONFIRMED, 0, 0, content, strlen(content)));
 }
 
 static void mavc_on_call_disconnected(const void * call)
 {
     const pjapp_call_t * call_info = (const pjapp_call_t *) call;
-    mavc_call_t call_obj;
-    if (0 == mavc_extract_info_from_url(call_info->m_remote_url,
-        call_obj.user_name, sizeof(call_obj.user_name),
-        call_obj.remote_host, sizeof(call_obj.remote_host)))
-    {
-        call_obj.id = call_info->m_call_id;
-        mavc_json_exec_1(mavc_call_t, &call_obj, content,
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
-                MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
-                NULL, MSG_MAVC_CALL_DISCONNECTED, 0, 0, content, strlen(content)));
-    }
+    mavc_call_t call_obj = { .id = call_info->m_call_id };
+    snprintf(call_obj.user_name, sizeof(call_obj.user_name), "%s", call_info->m_remote_username);
+    snprintf(call_obj.remote_host, sizeof(call_obj.remote_host), "%s", call_info->m_remote_host);
+    mavc_json_exec_1(mavc_call_t, &call_obj, content,
+        mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+            MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
+            NULL, MSG_MAVC_CALL_DISCONNECTED, 0, 0, content, strlen(content)));
 }
 
 static void mavc_on_call_cancelled(const void * call)
 {
     const pjapp_call_t * call_info = (const pjapp_call_t *) call;
-    mavc_call_t call_obj;
-    if (0 == mavc_extract_info_from_url(call_info->m_remote_url,
-        call_obj.user_name, sizeof(call_obj.user_name),
-        call_obj.remote_host, sizeof(call_obj.remote_host)))
-    {
-        call_obj.id = call_info->m_call_id;
-        mavc_json_exec_1(mavc_call_t, &call_obj, content,
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
-                MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
-                NULL, MSG_MAVC_CALL_CANCELLED, 0, 0, content, strlen(content)));
-    }
+    mavc_call_t call_obj = { .id = call_info->m_call_id };
+    snprintf(call_obj.user_name, sizeof(call_obj.user_name), "%s", call_info->m_remote_username);
+    snprintf(call_obj.remote_host, sizeof(call_obj.remote_host), "%s", call_info->m_remote_host);
+    mavc_json_exec_1(mavc_call_t, &call_obj, content,
+        mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+            MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
+            NULL, MSG_MAVC_CALL_CANCELLED, 0, 0, content, strlen(content)));
 }
 
 static void mavc_on_call_rejected(const void * call)
 {
     const pjapp_call_t * call_info = (const pjapp_call_t *) call;
-    mavc_call_t call_obj;
-    if (0 == mavc_extract_info_from_url(call_info->m_remote_url,
-        call_obj.user_name, sizeof(call_obj.user_name),
-        call_obj.remote_host, sizeof(call_obj.remote_host)))
-    {
-        call_obj.id = call_info->m_call_id;
-        mavc_json_exec_1(mavc_call_t, &call_obj, content,
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
-                MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
-                NULL, MSG_MAVC_CALL_REJECTED, 0, 0, content, strlen(content)));
-    }
+    mavc_call_t call_obj = { .id = call_info->m_call_id };
+    snprintf(call_obj.user_name, sizeof(call_obj.user_name), "%s", call_info->m_remote_username);
+    snprintf(call_obj.remote_host, sizeof(call_obj.remote_host), "%s", call_info->m_remote_host);
+    mavc_json_exec_1(mavc_call_t, &call_obj, content,
+        mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+            MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
+            NULL, MSG_MAVC_CALL_REJECTED, 0, 0, content, strlen(content)));
+}
+
+static void mavc_on_audio_eof(const void * audio)
+{
+    const pjapp_audio_play_t * audio_play = (const pjapp_audio_play_t *) audio;
+    mavc_audio_eof_t audio_eof_obj = { .id = audio_play->m_play_id };
+    mavc_json_exec_1(mavc_audio_eof_t, &audio_eof_obj, content,
+        mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+            MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
+            NULL, MSG_MAVC_AUDIO_PLAY_FINISHED, 0, 0, content, strlen(content)));
 }
 
 static mt_status_t module_load(mtool_module *module)
 {
     pjapp_config_t config;
-    pjapp_config_init(&config);
     config.m_account_configs.m_n_accounts = 0;
-    config.m_transport_configs.m_flags |= PJAPP_TP_UDP;
+    config.m_transport_configs.m_flags = PJAPP_TP_UDP;
     config.m_cbs_configs.m_cbs.on_incoming_call = mavc_on_incoming_call;
     config.m_cbs_configs.m_cbs.on_call_outgoing = mavc_on_call_outgoing;
     config.m_cbs_configs.m_cbs.on_call_confirmed = mavc_on_call_confirmed;
     config.m_cbs_configs.m_cbs.on_call_disconnected = mavc_on_call_disconnected;
     config.m_cbs_configs.m_cbs.on_call_cancelled = mavc_on_call_cancelled;
     config.m_cbs_configs.m_cbs.on_call_rejected = mavc_on_call_rejected;
+    config.m_cbs_configs.m_cbs.on_audio_eof = mavc_on_audio_eof;
     pjapp_init(&config);
     return MT_SUCCESS;
 }
 
 static mt_status_t module_start(mtool_module *module)
 {
-    pjapp_start();
     return MT_SUCCESS;
 }
 
@@ -286,7 +153,7 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
         case MSG_MAVC_MAKE_CALL: {
             mavc_call_t call_data;
             mavc_json_cast_1(mavc_call_t, (char *) content, &call_data);
-            char url[64];
+            char url[136];
             if (strlen(call_data.user_name) > 0)
             {
                 snprintf(url, sizeof(url), "sip:%s@%s", call_data.user_name, call_data.remote_host);
@@ -294,7 +161,7 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
             {
                 snprintf(url, sizeof(url), "sip:%s", call_data.remote_host);
             }
-            pjapp_make_call_v2(url, 0, NULL);
+            pjapp_make_call_v2(url, NULL);
             break;
         }
         case MSG_MAVC_ACCEPT_CALL: {
@@ -319,6 +186,32 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
             mavc_call_t call_data;
             mavc_json_cast_1(mavc_call_t, (char *) content, &call_data);
             pjapp_cancel_call(call_data.id);
+            break;
+        }
+        case MSG_MAVC_START_PLAY_AUDIO: {
+            mavc_audio_file_t audio_file;
+            mavc_json_cast_1(mavc_audio_file_t, (char *) content, &audio_file);
+            int aud_id = 0;
+            pjapp_err err = pjapp_play_wav(audio_file.filename, !!audio_file.loop, &aud_id);
+            mavc_audio_file_ack_t ack = {
+                .status = PJAPP_ERR_SUCCESS == err ? 0 : -1,
+                .id = aud_id,
+            };
+            mavc_json_exec_1(mavc_audio_file_ack_t, &ack, content,
+                mtool_module_send_reliable_ack2(message, MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+                    0, 0, content, strlen(content)));
+            break;
+        }
+        case MSG_MAVC_STOP_PLAY_AUDIO: {
+            mavc_audio_file_t audio_file;
+            mavc_json_cast_1(mavc_audio_file_t, (char *) content, &audio_file);
+            pjapp_stop_wav(audio_file.id);
+            break;
+        }
+        case MSG_MAVC_SET_VOLUME: {
+            mavc_audio_volume_t volume;
+            mavc_json_cast_1(mavc_audio_volume_t, (char *) content, &volume);
+            pjapp_set_volume(volume.id, volume.volume);
             break;
         }
         default:

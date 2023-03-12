@@ -21,9 +21,33 @@ extern "C" {
 typedef struct mavc_call_t
 {
     int id;
-    char user_name[16];
-    char remote_host[32];
+    char user_name[64];
+    char remote_host[64];
 } mavc_call_t;
+
+typedef struct mavc_audio_file_t
+{
+    int id;
+    int loop;
+    char filename[64];
+} mavc_audio_file_t;
+
+typedef struct mavc_audio_file_ack_t
+{
+    int status;
+    int id;
+} mavc_audio_file_ack_t;
+
+typedef struct mavc_audio_volume_t
+{
+    int id;
+    int volume;
+} mavc_audio_volume_t;
+
+typedef struct mavc_audio_eof_t
+{
+    int id;
+} mavc_audio_eof_t;
 
 /**
  * @}

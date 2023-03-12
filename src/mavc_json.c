@@ -52,6 +52,25 @@ char * mavc_json_mavc_call_t_2_json_obj(const mavc_call_t * call)
     return str;
 }
 
+char * mavc_json_mavc_audio_file_ack_t_2_json_obj(const mavc_audio_file_ack_t * ack)
+{
+    cJSON * obj = cJSON_CreateObject();
+    cJSON_AddNumberToObject(obj, "id", ack->id);
+    cJSON_AddNumberToObject(obj, "status", ack->status);
+    char * str = cJSON_PrintUnformatted(obj);
+    cJSON_Delete(obj);
+    return str;
+}
+
+char * mavc_json_mavc_audio_eof_t_2_json_obj(const mavc_audio_eof_t * audio_eof)
+{
+    cJSON * obj = cJSON_CreateObject();
+    cJSON_AddNumberToObject(obj, "id", audio_eof->id);
+    char * str = cJSON_PrintUnformatted(obj);
+    cJSON_Delete(obj);
+    return str;
+}
+
 
 void mavc_json_json_obj_2_mavc_call_t(const char * json_str, mavc_call_t * call)
 {
@@ -61,6 +80,29 @@ void mavc_json_json_obj_2_mavc_call_t(const char * json_str, mavc_call_t * call)
         json_get_number(obj, "id", call->id, -1, int);
         json_str_obj_2_char_arr(obj, "user_name", call->user_name);
         json_str_obj_2_char_arr(obj, "remote_host", call->remote_host);
+        cJSON_Delete(obj);
+    }
+}
+
+void mavc_json_json_obj_2_mavc_audio_file_t(const char * json_str, mavc_audio_file_t * audio_file)
+{
+    cJSON * obj = cJSON_Parse(json_str);
+    if (NULL != obj)
+    {
+        json_get_number(obj, "id", audio_file->id, -1, int);
+        json_str_obj_2_char_arr(obj, "file", audio_file->filename);
+        json_get_number(obj, "loop", audio_file->loop, 0, int);
+        cJSON_Delete(obj);
+    }
+}
+
+void mavc_json_json_obj_2_mavc_audio_volume_t(const char * json_str, mavc_audio_volume_t * audio_volume)
+{
+    cJSON * obj = cJSON_Parse(json_str);
+    if (NULL != obj)
+    {
+        json_get_number(obj, "id", audio_volume->id, -1, int);
+        json_get_number(obj, "volume", audio_volume->volume, 5, int);
         cJSON_Delete(obj);
     }
 }
