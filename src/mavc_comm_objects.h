@@ -49,6 +49,12 @@ typedef struct mavc_audio_eof_t
     int id;
 } mavc_audio_eof_t;
 
+typedef struct mavc_record_t
+{
+    char filename[64];
+    unsigned sources;
+} mavc_record_t;
+
 /**
  * @}
  */

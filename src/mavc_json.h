@@ -50,6 +50,8 @@ void mavc_json_json_obj_2_mavc_audio_file_t(const char * json_str, mavc_audio_fi
 
 void mavc_json_json_obj_2_mavc_audio_volume_t(const char * json_str, mavc_audio_volume_t * audio_volume);
 
+void mavc_json_json_obj_2_mavc_record_t(const char * json_str, mavc_record_t * record);
+
 /**
  * @}
  */

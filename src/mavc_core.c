@@ -214,6 +214,16 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
             pjapp_set_volume(volume.id, volume.volume);
             break;
         }
+        case MSG_MAVC_START_RECORD: {
+            mavc_record_t record;
+            mavc_json_cast_1(mavc_record_t, (char *) content, &record);
+            pjapp_record_start(record.filename, record.sources);
+            break;
+        }
+        case MSG_MAVC_STOP_RECORD: {
+            pjapp_record_stop();
+            break;
+        }
         default:
             status = MT_EUNKNOWN;
         break;
