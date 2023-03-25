@@ -40,6 +40,17 @@
     } \
 } while (0)
 
+#define json_get_bool(json_obj, key, val, def_val) do { \
+    cJSON * obj_ = cJSON_GetObjectItem(json_obj, key); \
+    if (NULL != obj_) \
+    { \
+        val = cJSON_IsTrue(obj_) ? true : false; \
+    } else \
+    { \
+        val = def_val; \
+    } \
+} while (0)
+
 
 char * mavc_json_mavc_call_t_2_json_obj(const mavc_call_t * call)
 {
@@ -153,6 +164,8 @@ void mavc_json_json_obj_2_mavc_call_t(const char * json_str, mavc_call_t * call)
         json_get_number(obj, "id", call->id, -1, int);
         json_str_obj_2_char_arr(obj, "user_name", call->user_name);
         json_str_obj_2_char_arr(obj, "remote_host", call->remote_host);
+        json_get_bool(obj, "has_audio", call->has_audio, true);
+        json_get_bool(obj, "has_video", call->has_video, true);
         cJSON_Delete(obj);
     }
 }

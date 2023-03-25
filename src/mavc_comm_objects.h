@@ -23,6 +23,9 @@ typedef struct mavc_call_t
     int id;
     char user_name[64];
     char remote_host[64];
+    bool has_audio;
+    bool has_video;
+    char reserved[2];
 } mavc_call_t;
 
 typedef struct mavc_audio_file_t

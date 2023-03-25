@@ -36,7 +36,7 @@ static void mavc_on_incoming_call(const void * call)
     mavc_json_exec_1(mavc_call_t, &call_obj, content,
         mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
             MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
-            NULL, MSG_MAVC_INCOMING_CALL, 0, 0, content, strlen(content)));
+            NULL, MSG_MAVC_INCOMING_CALL, 0, 0, content, strlen(content) + 1));
 }
 
 static void mavc_on_call_outgoing(const void * call)
@@ -48,7 +48,7 @@ static void mavc_on_call_outgoing(const void * call)
     mavc_json_exec_1(mavc_call_t, &call_obj, content,
         mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
             MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
-            NULL, MSG_MAVC_CALL_OUTGOING, 0, 0, content, strlen(content)));
+            NULL, MSG_MAVC_CALL_OUTGOING, 0, 0, content, strlen(content) + 1));
 }
 
 static void mavc_on_call_confirmed(const void * call)
@@ -60,7 +60,7 @@ static void mavc_on_call_confirmed(const void * call)
     mavc_json_exec_1(mavc_call_t, &call_obj, content,
         mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
             MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
-            NULL, MSG_MAVC_CALL_CONFIRMED, 0, 0, content, strlen(content)));
+            NULL, MSG_MAVC_CALL_CONFIRMED, 0, 0, content, strlen(content) + 1));
 }
 
 static void mavc_on_call_disconnected(const void * call)
@@ -72,7 +72,7 @@ static void mavc_on_call_disconnected(const void * call)
     mavc_json_exec_1(mavc_call_t, &call_obj, content,
         mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
             MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
-            NULL, MSG_MAVC_CALL_DISCONNECTED, 0, 0, content, strlen(content)));
+            NULL, MSG_MAVC_CALL_DISCONNECTED, 0, 0, content, strlen(content) + 1));
 }
 
 static void mavc_on_call_cancelled(const void * call)
@@ -84,7 +84,7 @@ static void mavc_on_call_cancelled(const void * call)
     mavc_json_exec_1(mavc_call_t, &call_obj, content,
         mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
             MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
-            NULL, MSG_MAVC_CALL_CANCELLED, 0, 0, content, strlen(content)));
+            NULL, MSG_MAVC_CALL_CANCELLED, 0, 0, content, strlen(content) + 1));
 }
 
 static void mavc_on_call_rejected(const void * call)
@@ -96,7 +96,7 @@ static void mavc_on_call_rejected(const void * call)
     mavc_json_exec_1(mavc_call_t, &call_obj, content,
         mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
             MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
-            NULL, MSG_MAVC_CALL_REJECTED, 0, 0, content, strlen(content)));
+            NULL, MSG_MAVC_CALL_REJECTED, 0, 0, content, strlen(content) + 1));
 }
 
 static void mavc_on_audio_eof(const void * audio)
@@ -106,7 +106,7 @@ static void mavc_on_audio_eof(const void * audio)
     mavc_json_exec_1(mavc_audio_eof_t, &audio_eof_obj, content,
         mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
             MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
-            NULL, MSG_MAVC_AUDIO_PLAY_FINISHED, 0, 0, content, strlen(content)));
+            NULL, MSG_MAVC_AUDIO_PLAY_FINISHED, 0, 0, content, strlen(content) + 1));
 }
 
 static mt_status_t module_load(mtool_module *module)
@@ -161,13 +161,13 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
             {
                 snprintf(url, sizeof(url), "sip:%s", call_data.remote_host);
             }
-            pjapp_make_call_v2(url, NULL);
+            pjapp_make_call_v2(url, call_data.has_audio, call_data.has_video, NULL);
             break;
         }
         case MSG_MAVC_ACCEPT_CALL: {
             mavc_call_t call_data;
             mavc_json_cast_1(mavc_call_t, (char *) content, &call_data);
-            pjapp_accept_call(call_data.id);
+            pjapp_accept_call(call_data.id, call_data.has_audio, call_data.has_video);
             break;
         }
         case MSG_MAVC_HANGUP_CALL: {
@@ -200,6 +200,18 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
             mavc_json_exec_1(mavc_audio_file_ack_t, &ack, content,
                 mtool_module_send_reliable_ack2(message, MTOOL_MODULE_MESSAGE_JSON_CONTENT,
                     0, 0, content, strlen(content)));
+            break;
+        }
+        case MSG_MAVC_PAUSE_PLAY_AUDIO: {
+            mavc_audio_file_t audio_file;
+            mavc_json_cast_1(mavc_audio_file_t, (char *) content, &audio_file);
+            pjapp_pause_wav(audio_file.id);
+            break;
+        }
+        case MSG_MAVC_RESUME_PLAY_AUDIO: {
+            mavc_audio_file_t audio_file;
+            mavc_json_cast_1(mavc_audio_file_t, (char *) content, &audio_file);
+            pjapp_resume_wav(audio_file.id);
             break;
         }
         case MSG_MAVC_STOP_PLAY_AUDIO: {
