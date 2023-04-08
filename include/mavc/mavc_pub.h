@@ -27,6 +27,29 @@ extern "C" {
  * @{
  */
 
+
+struct mavc_config_server_t;
+struct mavc_config_t;
+
+typedef struct mavc_config_server_t mavc_config_server_t;
+typedef struct mavc_config_t mavc_config_t;
+
+
+struct mavc_config_server_t
+{
+    char m_username[32];
+    char m_password[32];  // @todo: Encrypt it.
+    char m_server_host[32];
+    int m_port;
+    bool m_active;
+};
+
+struct mavc_config_t
+{
+    mavc_config_server_t m_server;
+};
+
+
 /**
  * @}
  */

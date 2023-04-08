@@ -22,7 +22,7 @@ extern "C" {
 
 mtool_module *mavc_core_get_instance(void);
 
-mt_status_t mavc_core_register(void);
+mt_status_t mavc_core_register(const mavc_config_t * config);
 
 void mavc_core_unregister(void);
 

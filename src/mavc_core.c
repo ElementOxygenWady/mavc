@@ -11,6 +11,7 @@
 #include "private.h"
 #include "mavc_json.h"
 #include "mavc_comm_objects.h"
+#include <mavc/mavc_pub.h>
 #include <e2str/e2str_module_message.h>
 #include <pjapp/pjapp.h>
 
@@ -26,6 +27,20 @@ struct mavc_t;
 
 typedef struct mavc_t mavc_t;
 
+
+struct mavc_t
+{
+    const mavc_config_t * m_config;
+};
+
+
+static mavc_t * mavc_get(void)
+{
+    static mavc_t instance = {
+        .m_config = NULL,
+    };
+    return &instance;
+}
 
 static void mavc_on_incoming_call(const void * call)
 {
@@ -111,6 +126,7 @@ static void mavc_on_audio_eof(const void * audio)
 
 static mt_status_t module_load(mtool_module *module)
 {
+    mavc_t * instance = mavc_get();
     pjapp_config_t config;
     config.m_account_configs.m_n_accounts = 0;
     config.m_transport_configs.m_flags = PJAPP_TP_UDP;
@@ -121,6 +137,34 @@ static mt_status_t module_load(mtool_module *module)
     config.m_cbs_configs.m_cbs.on_call_cancelled = mavc_on_call_cancelled;
     config.m_cbs_configs.m_cbs.on_call_rejected = mavc_on_call_rejected;
     config.m_cbs_configs.m_cbs.on_audio_eof = mavc_on_audio_eof;
+    {
+        if (NULL != instance->m_config)
+        {
+            do {
+                ASSERT_BREAK(instance->m_config->m_server.m_active);
+                ASSERT_BREAK(NULL != instance->m_config->m_server.m_username);
+                ASSERT_BREAK(NULL != instance->m_config->m_server.m_server_host);
+                char acc_url[128];
+                char server_url[128];
+                snprintf(acc_url, sizeof(acc_url), "sip:%s@%s",
+                    instance->m_config->m_server.m_username,
+                    instance->m_config->m_server.m_server_host);
+                if (instance->m_config->m_server.m_port > 0)
+                {
+                    snprintf(server_url, sizeof(server_url), "sip:%s:%d",
+                        instance->m_config->m_server.m_server_host,
+                        instance->m_config->m_server.m_port);
+                } else
+                {
+                    snprintf(server_url, sizeof(server_url), "sip:%s",
+                        instance->m_config->m_server.m_server_host);
+                }
+                pjapp_config_add_account(&config, acc_url, server_url, NULL,
+                    instance->m_config->m_server.m_username, instance->m_config->m_server.m_password);
+            } while (0);
+            instance->m_config = NULL;  // Do not keep config in memory.
+        }
+    }
     pjapp_init(&config);
     return MT_SUCCESS;
 }
@@ -270,7 +314,7 @@ mtool_module *mavc_core_get_instance(void)
     return &module_instance;
 }
 
-mt_status_t mavc_core_register(void)
+mt_status_t mavc_core_register(const mavc_config_t * config)
 {
     mtool_module_manager_config mtmgr_config;
     mtool_module_transport server_module = {
@@ -288,6 +332,9 @@ mt_status_t mavc_core_register(void)
     mtool_module_manager_init(&mtmgr_config);
 
     mtool_module_helper_add_server_module(&server_module);
+
+    // Set external configurations.
+    mavc_get()->m_config = config;
 
     return mtool_module_register(&module_instance);
 }
