@@ -137,6 +137,9 @@ static mt_status_t module_load(mtool_module *module)
     config.m_cbs_configs.m_cbs.on_call_cancelled = mavc_on_call_cancelled;
     config.m_cbs_configs.m_cbs.on_call_rejected = mavc_on_call_rejected;
     config.m_cbs_configs.m_cbs.on_audio_eof = mavc_on_audio_eof;
+    config.m_media_configs.m_ec_flags = PJAPP_EC_FLAG_WEBRTC |
+                                        PJAPP_EC_FLAG_AGGRESSIVENESS_AGGRESSIVE |
+                                        PJAPP_EC_FLAG_USE_NOISE_SUPPRESSOR;
     {
         if (NULL != instance->m_config)
         {
