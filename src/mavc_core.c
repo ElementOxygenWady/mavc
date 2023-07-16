@@ -246,7 +246,7 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
             };
             mavc_json_exec_1(mavc_audio_file_ack_t, &ack, content,
                 mtool_module_send_reliable_ack2(message, MTOOL_MODULE_MESSAGE_JSON_CONTENT,
-                    0, 0, content, strlen(content)));
+                    0, 0, content, strlen(content) + 1));
             break;
         }
         case MSG_MAVC_PAUSE_PLAY_AUDIO: {

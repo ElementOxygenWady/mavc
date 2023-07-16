@@ -315,6 +315,7 @@ int main(int argc, char *argv[], char *env[])
                 NULL, MSG_MAVC_START_PLAY_AUDIO, 0, 0, content, strlen(content) + 1, 2000, &holder);
             if (NULL != holder)
             {
+                MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
                 cJSON * obj = cJSON_Parse((char *) holder->content);
                 g_play_id = (int) cJSON_GetNumberValue(cJSON_GetObjectItem(obj, "id"));
                 cJSON_Delete(obj);
