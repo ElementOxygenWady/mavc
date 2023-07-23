@@ -92,6 +92,10 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
             MAVC_LOGI(LOG_TAG, "Recv MSG_MAVC_AUDIO_PLAY_FINISHED: %s", (char *) content);
             break;
         }
+        case MSG_MAVC_NOTIFY_REGISTER_STATUS: {
+            MAVC_LOGI(LOG_TAG, "Recv MSG_MAVC_NOTIFY_REGISTER_STATUS: %s", (char *) content);
+            break;
+        }
         default:
             status = MT_EUNKNOWN;
         break;
@@ -378,6 +382,57 @@ int main(int argc, char *argv[], char *env[])
             mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_BINARY_CONTENT,
                 MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
                 NULL, MSG_MAVC_STOP_RECORD, 0, 0, NULL, 0);
+        } else if(!strcasecmp(cmd, "RegisterServer") || !strcmp(cmd, "rs"))
+        {
+            char content[128] = {0};
+            snprintf(content, sizeof(content), "{\"username\": \"100025\", \"password\": \"h12345\", " \
+                "\"server_host\": \"120.76.99.131\", \"port\": 25099, \"is_default\": true}");
+            mtool_module_message_holder * holder = NULL;
+            mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+                MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
+                NULL, MSG_MAVC_REGISTER_ACCOUNT, 0, 0, content, strlen(content) + 1, 2000, &holder);
+            if (NULL != holder)
+            {
+                MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
+                mtool_module_message_holder_destroy(holder);
+            }
+        } else if(!strcasecmp(cmd, "UnRegisterServer") || !strcmp(cmd, "urs"))
+        {
+            char content[64] = {0};
+            snprintf(content, sizeof(content), "{\"account_id\": 2}");
+            mtool_module_message_holder * holder = NULL;
+            mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+                MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
+                NULL, MSG_MAVC_UNREGISTER_ACCOUNT, 0, 0, content, strlen(content) + 1, 2000, &holder);
+            if (NULL != holder)
+            {
+                MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
+                mtool_module_message_holder_destroy(holder);
+            }
+        } else if(!strcasecmp(cmd, "GetAccountList") || !strcmp(cmd, "gal"))
+        {
+            mtool_module_message_holder * holder = NULL;
+            mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_BINARY_CONTENT,
+                MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
+                NULL, MSG_MAVC_GET_ACCOUNT_LIST, 0, 0, NULL, 0, 2000, &holder);
+            if (NULL != holder)
+            {
+                MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
+                mtool_module_message_holder_destroy(holder);
+            }
+        } else if(!strcasecmp(cmd, "SetDefaultAccount") || !strcmp(cmd, "sda"))
+        {
+            char content[64] = {0};
+            snprintf(content, sizeof(content), "{\"account_id\": 2}");
+            mtool_module_message_holder * holder = NULL;
+            mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+                MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
+                NULL, MSG_MAVC_SET_DEFAULT_ACCOUNT, 0, 0, content, strlen(content) + 1, 2000, &holder);
+            if (NULL != holder)
+            {
+                MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
+                mtool_module_message_holder_destroy(holder);
+            }
         } else if (!strcasecmp(cmd, "quit") || !strcmp(cmd, "q"))
         {
             break;

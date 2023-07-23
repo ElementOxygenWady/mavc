@@ -52,6 +52,20 @@ void mavc_json_json_obj_2_mavc_audio_volume_t(const char * json_str, mavc_audio_
 
 void mavc_json_json_obj_2_mavc_record_t(const char * json_str, mavc_record_t * record);
 
+void mavc_json_json_obj_2_mavc_server_account_t(const char * json_str, mavc_server_account_t * server_acc);
+
+
+#define mavc_json_simple_get(json_str, key, def_value, type) ({ \
+    cJSON * obj = cJSON_Parse(json_str); \
+    cJSON * obj_ = cJSON_GetObjectItem(obj, key); \
+    type val = def_value; \
+    if (NULL != obj_) \
+    { \
+        val = (type) cJSON_GetNumberValue(obj_); \
+    } \
+    (val); \
+})
+
 /**
  * @}
  */

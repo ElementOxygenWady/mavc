@@ -30,16 +30,18 @@ extern "C" {
 
 struct mavc_config_server_t;
 struct mavc_config_t;
+struct mavc_server_account_t;
 
 typedef struct mavc_config_server_t mavc_config_server_t;
 typedef struct mavc_config_t mavc_config_t;
+typedef struct mavc_server_account_t mavc_server_account_t;
 
 
 struct mavc_config_server_t
 {
-    char m_username[32];
+    char m_username[16];
     char m_password[32];  // @todo: Encrypt it.
-    char m_server_host[32];
+    char m_server_host[16];
     int m_port;
     bool m_active;
 };
@@ -47,6 +49,13 @@ struct mavc_config_server_t
 struct mavc_config_t
 {
     mavc_config_server_t m_server;
+};
+
+struct mavc_server_account_t
+{
+    mavc_config_server_t m_acc_info;
+    char m_is_default;
+    char m_reserved[3];
 };
 
 

@@ -222,6 +222,20 @@ void mavc_json_json_obj_2_mavc_record_t(const char * json_str, mavc_record_t * r
     }
 }
 
+void mavc_json_json_obj_2_mavc_server_account_t(const char * json_str, mavc_server_account_t * server_acc)
+{
+    cJSON * obj = cJSON_Parse(json_str);
+    if (NULL != obj)
+    {
+        json_str_obj_2_char_arr(obj, "username", server_acc->m_acc_info.m_username);
+        json_str_obj_2_char_arr(obj, "password", server_acc->m_acc_info.m_password);
+        json_str_obj_2_char_arr(obj, "server_host", server_acc->m_acc_info.m_server_host);
+        json_get_number(obj, "port", server_acc->m_acc_info.m_port, 5060, int);
+        json_get_bool(obj, "is_default", server_acc->m_is_default, true);
+        cJSON_Delete(obj);
+    }
+}
+
 
 /**
  * @}

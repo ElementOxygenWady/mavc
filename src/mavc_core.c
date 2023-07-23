@@ -124,6 +124,19 @@ static void mavc_on_audio_eof(const void * audio)
             NULL, MSG_MAVC_AUDIO_PLAY_FINISHED, 0, 0, content, strlen(content) + 1));
 }
 
+static void mavc_on_register_status(int acc_id, pjapp_reg_status_e status)
+{
+    cJSON * obj = cJSON_CreateObject();
+    cJSON_AddNumberToObject(obj, "account_id", acc_id);
+    cJSON_AddNumberToObject(obj, "status", status);
+    char * content = cJSON_PrintUnformatted(obj);
+    mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+        MTOOL_MODULE_AVC_NAME, -1, UI_MODULE, -1,
+        NULL, MSG_MAVC_NOTIFY_REGISTER_STATUS, 0, 0, content, strlen(content) + 1);
+    free(content);
+    cJSON_free(obj);
+}
+
 static mt_status_t module_load(mtool_module *module)
 {
     mavc_t * instance = mavc_get();
@@ -137,6 +150,7 @@ static mt_status_t module_load(mtool_module *module)
     config.m_cbs_configs.m_cbs.on_call_cancelled = mavc_on_call_cancelled;
     config.m_cbs_configs.m_cbs.on_call_rejected = mavc_on_call_rejected;
     config.m_cbs_configs.m_cbs.on_audio_eof = mavc_on_audio_eof;
+    config.m_cbs_configs.m_cbs.on_register_status = mavc_on_register_status;
     config.m_media_configs.m_ec_flags = PJAPP_EC_FLAG_WEBRTC |
                                         PJAPP_EC_FLAG_AGGRESSIVENESS_AGGRESSIVE |
                                         PJAPP_EC_FLAG_USE_NOISE_SUPPRESSOR;
@@ -281,6 +295,100 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
         }
         case MSG_MAVC_STOP_RECORD: {
             pjapp_record_stop();
+            break;
+        }
+        case MSG_MAVC_REGISTER_ACCOUNT: {
+            mavc_server_account_t server_acc_info;
+            mavc_json_cast_1(mavc_server_account_t, (char *) content, &server_acc_info);
+            pjapp_server_account_t server_acc;
+            snprintf(server_acc.m_acc_url, sizeof(server_acc.m_acc_url), "sip:%s@%s",
+                server_acc_info.m_acc_info.m_username, server_acc_info.m_acc_info.m_server_host);
+            if (server_acc_info.m_acc_info.m_port > 0)
+            {
+                snprintf(server_acc.m_server_url, sizeof(server_acc.m_server_url), "sip:%s:%d",
+                    server_acc_info.m_acc_info.m_server_host,
+                    server_acc_info.m_acc_info.m_port);
+            } else
+            {
+                snprintf(server_acc.m_server_url, sizeof(server_acc.m_server_url), "sip:%s",
+                    server_acc_info.m_acc_info.m_server_host);
+            }
+            snprintf(server_acc.m_realm, sizeof(server_acc.m_realm), "*");
+            snprintf(server_acc.m_username, sizeof(server_acc.m_username), "%s", server_acc_info.m_acc_info.m_username);
+            snprintf(server_acc.m_password, sizeof(server_acc.m_password), "%s", server_acc_info.m_acc_info.m_password);
+            int acc_id = PJAPP_INVALID_ID;
+            pjapp_err err = pjapp_register_account(&server_acc, server_acc_info.m_is_default, &acc_id);
+
+            cJSON * obj = cJSON_CreateObject();
+            cJSON_AddBoolToObject(obj, "status", PJAPP_ERR_SUCCESS == err);
+            if (PJAPP_ERR_SUCCESS == err)
+            {
+                cJSON_AddNumberToObject(obj, "account_id", acc_id);
+            }
+            char * ack = cJSON_PrintUnformatted(obj);
+            mtool_module_send_reliable_ack2(message, MTOOL_MODULE_MESSAGE_JSON_CONTENT, 0, 0, ack, strlen(ack) + 1);
+            cJSON_Delete(obj);
+            break;
+        }
+        case MSG_MAVC_UNREGISTER_ACCOUNT: {
+            int acc_id = mavc_json_simple_get(content, "account_id", PJAPP_INVALID_ID, int);
+            cJSON * obj = cJSON_CreateObject();
+            if (PJAPP_INVALID_ID != acc_id)
+            {
+                pjapp_err err = pjapp_unregister_account(acc_id);
+                cJSON_AddBoolToObject(obj, "status", PJAPP_ERR_SUCCESS == err);
+            } else
+            {
+                cJSON_AddBoolToObject(obj, "status", false);
+            }
+            char * ack = cJSON_PrintUnformatted(obj);
+            mtool_module_send_reliable_ack2(message, MTOOL_MODULE_MESSAGE_JSON_CONTENT, 0, 0, ack, strlen(ack) + 1);
+            cJSON_Delete(obj);
+            break;
+        }
+        case MSG_MAVC_GET_ACCOUNT_LIST: {
+            pjapp_account_t accounts[8];
+            unsigned n_accounts = sizeof(accounts) / sizeof(accounts[0]);
+            cJSON * obj = cJSON_CreateObject();
+            pjapp_err err = pjapp_get_account_list(accounts, &n_accounts);
+            cJSON_AddBoolToObject(obj, "status", PJAPP_ERR_SUCCESS == err);
+            cJSON * arr = cJSON_AddArrayToObject(obj, "accounts");
+            for (unsigned i = 0; i < n_accounts; ++i)
+            {
+                cJSON * acc_obj = cJSON_CreateObject();
+                cJSON_AddBoolToObject(acc_obj, "is_default", accounts[i].m_is_default_account);
+                cJSON_AddNumberToObject(acc_obj, "account_id", accounts[i].m_acc_id);
+                if (accounts[i].m_is_local_account)
+                {
+                    cJSON_AddStringToObject(acc_obj, "acc_url", accounts[i].m_details.m_local_account.m_acc_url);
+                } else
+                {
+                    cJSON_AddStringToObject(acc_obj, "acc_url", accounts[i].m_details.m_server_account.m_acc_url);
+                    cJSON_AddStringToObject(acc_obj, "server_url", accounts[i].m_details.m_server_account.m_server_url);
+                    cJSON_AddStringToObject(acc_obj, "realm", accounts[i].m_details.m_server_account.m_realm);
+                    cJSON_AddStringToObject(acc_obj, "username", accounts[i].m_details.m_server_account.m_username);
+                }
+                cJSON_AddItemToArray(arr, acc_obj);
+            }
+            char * ack = cJSON_PrintUnformatted(obj);
+            mtool_module_send_reliable_ack2(message, MTOOL_MODULE_MESSAGE_JSON_CONTENT, 0, 0, ack, strlen(ack) + 1);
+            cJSON_Delete(obj);
+            break;
+        }
+        case MSG_MAVC_SET_DEFAULT_ACCOUNT: {
+            int acc_id = mavc_json_simple_get(content, "account_id", PJAPP_INVALID_ID, int);
+            cJSON * obj = cJSON_CreateObject();
+            if (PJAPP_INVALID_ID != acc_id)
+            {
+                pjapp_err err = pjapp_set_default_account(acc_id);
+                cJSON_AddBoolToObject(obj, "status", PJAPP_ERR_SUCCESS == err);
+            } else
+            {
+                cJSON_AddBoolToObject(obj, "status", false);
+            }
+            char * ack = cJSON_PrintUnformatted(obj);
+            mtool_module_send_reliable_ack2(message, MTOOL_MODULE_MESSAGE_JSON_CONTENT, 0, 0, ack, strlen(ack) + 1);
+            cJSON_Delete(obj);
             break;
         }
         default:
