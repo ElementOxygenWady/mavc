@@ -313,11 +313,27 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
                 snprintf(server_acc.m_server_url, sizeof(server_acc.m_server_url), "sip:%s",
                     server_acc_info.m_acc_info.m_server_host);
             }
+            pjapp_transport_enum tp;
+            pjapp_transport_enum * tp_ = &tp;
+            switch (server_acc_info.m_tp)
+            {
+                case MAVC_TP_UDP:
+                    tp = PJAPP_TP_UDP;
+                    break;
+                case MAVC_TP_TCP:
+                    tp = PJAPP_TP_TCP;
+                    break;
+                case MAVC_TP_TLS:
+                    tp = PJAPP_TP_TLS;
+                    break;
+                default:
+                    tp_ = NULL;
+            }
             snprintf(server_acc.m_realm, sizeof(server_acc.m_realm), "*");
             snprintf(server_acc.m_username, sizeof(server_acc.m_username), "%s", server_acc_info.m_acc_info.m_username);
             snprintf(server_acc.m_password, sizeof(server_acc.m_password), "%s", server_acc_info.m_acc_info.m_password);
             int acc_id = PJAPP_INVALID_ID;
-            pjapp_err err = pjapp_register_account(&server_acc, server_acc_info.m_is_default, &acc_id);
+            pjapp_err err = pjapp_register_account(&server_acc, server_acc_info.m_is_default, tp_, &acc_id);
 
             cJSON * obj = cJSON_CreateObject();
             cJSON_AddBoolToObject(obj, "status", PJAPP_ERR_SUCCESS == err);
@@ -367,6 +383,7 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
                     cJSON_AddStringToObject(acc_obj, "server_url", accounts[i].m_details.m_server_account.m_server_url);
                     cJSON_AddStringToObject(acc_obj, "realm", accounts[i].m_details.m_server_account.m_realm);
                     cJSON_AddStringToObject(acc_obj, "username", accounts[i].m_details.m_server_account.m_username);
+                    cJSON_AddNumberToObject(acc_obj, "account_status", accounts[i].m_details.m_server_account.m_status);
                 }
                 cJSON_AddItemToArray(arr, acc_obj);
             }

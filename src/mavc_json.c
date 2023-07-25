@@ -231,6 +231,7 @@ void mavc_json_json_obj_2_mavc_server_account_t(const char * json_str, mavc_serv
         json_str_obj_2_char_arr(obj, "password", server_acc->m_acc_info.m_password);
         json_str_obj_2_char_arr(obj, "server_host", server_acc->m_acc_info.m_server_host);
         json_get_number(obj, "port", server_acc->m_acc_info.m_port, 5060, int);
+        json_get_number(obj, "transport", server_acc->m_tp, MAVC_TP_AUTO, mavc_transport_e);
         json_get_bool(obj, "is_default", server_acc->m_is_default, true);
         cJSON_Delete(obj);
     }

@@ -386,7 +386,7 @@ int main(int argc, char *argv[], char *env[])
         {
             char content[128] = {0};
             snprintf(content, sizeof(content), "{\"username\": \"100025\", \"password\": \"h12345\", " \
-                "\"server_host\": \"120.76.99.131\", \"port\": 25099, \"is_default\": true}");
+                "\"server_host\": \"120.76.99.131\", \"port\": 25099, \"is_default\": true, \"transport\": 1}");
             mtool_module_message_holder * holder = NULL;
             mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
                 MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,

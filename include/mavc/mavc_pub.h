@@ -28,14 +28,24 @@ extern "C" {
  */
 
 
+enum mavc_transport_e;
 struct mavc_config_server_t;
 struct mavc_config_t;
 struct mavc_server_account_t;
 
+typedef enum mavc_transport_e mavc_transport_e;
 typedef struct mavc_config_server_t mavc_config_server_t;
 typedef struct mavc_config_t mavc_config_t;
 typedef struct mavc_server_account_t mavc_server_account_t;
 
+
+enum mavc_transport_e
+{
+    MAVC_TP_AUTO,
+    MAVC_TP_UDP,
+    MAVC_TP_TCP,
+    MAVC_TP_TLS,
+};
 
 struct mavc_config_server_t
 {
@@ -54,6 +64,7 @@ struct mavc_config_t
 struct mavc_server_account_t
 {
     mavc_config_server_t m_acc_info;
+    mavc_transport_e m_tp;
     char m_is_default;
     char m_reserved[3];
 };
