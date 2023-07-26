@@ -368,24 +368,29 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
             cJSON * obj = cJSON_CreateObject();
             pjapp_err err = pjapp_get_account_list(accounts, &n_accounts);
             cJSON_AddBoolToObject(obj, "status", PJAPP_ERR_SUCCESS == err);
-            cJSON * arr = cJSON_AddArrayToObject(obj, "accounts");
-            for (unsigned i = 0; i < n_accounts; ++i)
+            if (PJAPP_ERR_SUCCESS == err)
             {
-                cJSON * acc_obj = cJSON_CreateObject();
-                cJSON_AddBoolToObject(acc_obj, "is_default", accounts[i].m_is_default_account);
-                cJSON_AddNumberToObject(acc_obj, "account_id", accounts[i].m_acc_id);
-                if (accounts[i].m_is_local_account)
+                cJSON * arr = cJSON_AddArrayToObject(obj, "accounts");
+                for (unsigned i = 0; i < n_accounts; ++i)
                 {
-                    cJSON_AddStringToObject(acc_obj, "acc_url", accounts[i].m_details.m_local_account.m_acc_url);
-                } else
-                {
-                    cJSON_AddStringToObject(acc_obj, "acc_url", accounts[i].m_details.m_server_account.m_acc_url);
-                    cJSON_AddStringToObject(acc_obj, "server_url", accounts[i].m_details.m_server_account.m_server_url);
-                    cJSON_AddStringToObject(acc_obj, "realm", accounts[i].m_details.m_server_account.m_realm);
-                    cJSON_AddStringToObject(acc_obj, "username", accounts[i].m_details.m_server_account.m_username);
-                    cJSON_AddNumberToObject(acc_obj, "account_status", accounts[i].m_details.m_server_account.m_status);
+                    cJSON * acc_obj = cJSON_CreateObject();
+                    cJSON_AddBoolToObject(acc_obj, "is_default", accounts[i].m_is_default_account);
+                    cJSON_AddNumberToObject(acc_obj, "account_id", accounts[i].m_acc_id);
+                    if (accounts[i].m_is_local_account)
+                    {
+                        cJSON_AddStringToObject(acc_obj, "acc_url", accounts[i].m_details.m_local_account.m_acc_url);
+                    } else
+                    {
+                        cJSON_AddStringToObject(acc_obj, "acc_url", accounts[i].m_details.m_server_account.m_acc_url);
+                        cJSON_AddStringToObject(acc_obj, "server_url",
+                            accounts[i].m_details.m_server_account.m_server_url);
+                        cJSON_AddStringToObject(acc_obj, "realm", accounts[i].m_details.m_server_account.m_realm);
+                        cJSON_AddStringToObject(acc_obj, "username", accounts[i].m_details.m_server_account.m_username);
+                        cJSON_AddNumberToObject(acc_obj, "account_status",
+                            accounts[i].m_details.m_server_account.m_status);
+                    }
+                    cJSON_AddItemToArray(arr, acc_obj);
                 }
-                cJSON_AddItemToArray(arr, acc_obj);
             }
             char * ack = cJSON_PrintUnformatted(obj);
             mtool_module_send_reliable_ack2(message, MTOOL_MODULE_MESSAGE_JSON_CONTENT, 0, 0, ack, strlen(ack) + 1);
