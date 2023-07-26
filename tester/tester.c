@@ -23,8 +23,6 @@
 #define CALL_IP "192.168.31.142"
 // #define CALL_IP "192.168.31.90"
 
-static int g_call_id = -1;
-static int g_play_id = -1;
 static int g_current_volume = 5;
 
 
@@ -60,16 +58,10 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
         break;
         case MSG_MAVC_INCOMING_CALL: {
             MAVC_LOGI(LOG_TAG, "Recv MSG_MAVC_INCOMING_CALL: %s", (char *) content);
-            cJSON * obj = cJSON_Parse((char *) content);
-            g_call_id = (int) cJSON_GetNumberValue(cJSON_GetObjectItem(obj, "id"));
-            cJSON_Delete(obj);
             break;
         }
         case MSG_MAVC_CALL_OUTGOING: {
             MAVC_LOGI(LOG_TAG, "Recv MSG_MAVC_CALL_OUTGOING: %s", (char *) content);
-            cJSON * obj = cJSON_Parse((char *) content);
-            g_call_id = (int) cJSON_GetNumberValue(cJSON_GetObjectItem(obj, "id"));
-            cJSON_Delete(obj);
             break;
         }
         case MSG_MAVC_CALL_CONFIRMED: {
@@ -170,6 +162,98 @@ static int print_usage(char *argv[])
     return 0;
 }
 
+
+#define ARG_NEXT_(cmd_, cmd_len_, process_len_) ({ \
+    char * param = mavc_extract_param(cmd_, cmd_len_, &process_len_); \
+    if (NULL != param) \
+    { \
+        cmd_len_ -= process_len_; \
+        cmd_ += process_len_; \
+    } \
+    (param); \
+})
+
+#define CHECK_ARG_HANDLE_NULLABLE_true MAVC_LOGE(LOG_TAG, "Wrong parameters!"); continue;
+#define CHECK_ARG_HANDLE_NULLABLE_false
+
+#define CHECK_ARG_(arg_, nullable_) if (NULL == (arg_)) \
+{ \
+    if (NULL == (arg_)) \
+    { \
+        (arg_) = ""; \
+    } \
+    CHECK_ARG_HANDLE_NULLABLE_##nullable_ \
+} else if (!strcasecmp(arg_, "--abort")) \
+{ \
+    MAVC_LOGI(LOG_TAG, "Aborted!"); \
+    continue; \
+}
+
+#define CHECK_ABORT_ARG_(cmd_, cmd_len_, process_len_) { \
+    char * param_ = NULL; \
+    bool do_continue = false; \
+    while (NULL != (param_ = ARG_NEXT_(cmd_, cmd_len_, process_len_))) \
+    { \
+        if (!strcasecmp(param_, "--abort")) \
+        { \
+            MAVC_LOGI(LOG_TAG, "Aborted!"); \
+            do_continue = true; \
+            break; \
+        } \
+    } \
+    if (do_continue) \
+    { \
+        continue; \
+    } \
+}
+
+
+// Refer from function mgwe_wifi_utils_extract_param() in mgwe.
+static char * mavc_extract_param(char * raw_params, unsigned raw_params_len, unsigned * process_len)
+{
+    *process_len = 0;
+    char * p = NULL;
+    char * q = raw_params;
+    bool do_continue = true;
+    while (raw_params_len > 0 && do_continue)
+    {
+        ++*process_len;
+        switch (*q)
+        {
+            case '\r':
+            case '\n': {
+                if (NULL == p)
+                {
+                    do_continue = false;
+                    break;
+                }
+            }
+                // Must put outside the quotes, and must not put any comments in the same line.
+                // fall-through
+            case ' ':
+            case '\t': {
+                if (NULL != p)
+                {
+                    *q = '\0';
+                    do_continue = false;
+                    break;
+                }
+                break;
+            }
+            default: {
+                if (NULL == p)
+                {
+                    p = q;
+                }
+                break;
+            }
+        }
+        --raw_params_len;
+        ++q;
+    }
+    return p;
+}
+
 int main(int argc, char *argv[], char *env[])
 {
     MAVC_LOGD(LOG_TAG, "Test debug log.");
@@ -236,83 +320,188 @@ int main(int argc, char *argv[], char *env[])
 
     while (true) {
         unsigned i = 0;
-        char cmd[16] = {0};
-        memset(cmd, 0, sizeof(cmd));
+        char cmd_buffer[128] = {0};
+        char * cmd = cmd_buffer;
+        memset(cmd_buffer, 0, sizeof(cmd_buffer));
         char ch;
-        while ('\n' != (ch = getchar()) && i < (sizeof(cmd) - 1))
+        while ('\n' != (ch = (char) getchar()) && i < (sizeof(cmd_buffer) - 1))
         {
-            cmd[i++] = ch;
+            cmd_buffer[i++] = ch;
         }
-        MAVC_LOGD(LOG_TAG, "Input command: %s", cmd);
-        if (!strcasecmp(cmd, "Accept") || !strcmp(cmd, "a"))
+        MAVC_LOGI(LOG_TAG, "Input command: %s", cmd);
+
+        unsigned process_len = 0;
+        unsigned cmd_len = strlen(cmd);
+        char * cmd_name = mavc_extract_param(cmd, cmd_len, &process_len);
+        if (NULL == cmd_name)
         {
+            MAVC_LOGE(LOG_TAG, "Empty cmd.");
+            continue;
+        }
+        cmd_len -= process_len;
+        cmd += process_len;
+
+        if (!strcasecmp(cmd_name, "Accept") || !strcmp(cmd_name, "a"))
+        {
+            char * param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            if (!strcasecmp(param, "--help") || !strcasecmp(param, "-h"))
+            {
+                MAVC_LOGI(LOG_TAG, "Accept/a call-id has-audio<1|0> has-video<1|0> [--abort]");
+                continue;
+            }
+
+            int call_id = atoi(param);
+            param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            bool has_audio = strcmp(param, "0");
+            param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            bool has_video = strcmp(param, "0");
+            CHECK_ABORT_ARG_(cmd, cmd_len, process_len);
+
+            cJSON * obj = cJSON_CreateObject();
+            cJSON_AddNumberToObject(obj, "id", call_id);
+            cJSON_AddBoolToObject(obj, "has_audio", has_audio);
+            cJSON_AddBoolToObject(obj, "has_video", has_video);
+            char * content = cJSON_PrintUnformatted(obj);
+            mtool_module_message_holder * holder = NULL;
+            mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+                MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
+                NULL, MSG_MAVC_ACCEPT_CALL, 0, 0, content, strlen(content) + 1, 2000, &holder);
+            if (NULL != holder)
+            {
+                MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
+                mtool_module_message_holder_destroy(holder);
+            }
+            free(content);
+            cJSON_free(obj);
+        } else if (!strcasecmp(cmd_name, "HangUp") || !strcmp(cmd_name, "h"))
+        {
+            char * param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            if (!strcasecmp(param, "--help") || !strcasecmp(param, "-h"))
+            {
+                MAVC_LOGI(LOG_TAG, "HangUp/h call-id [--abort]");
+                continue;
+            }
+
+            int call_id = atoi(param);
+            CHECK_ABORT_ARG_(cmd, cmd_len, process_len);
+
             char content[64] = {0};
-            snprintf(content, sizeof(content), "{\"id\": %d}", g_call_id);
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+            snprintf(content, sizeof(content), "{\"id\": %d}", call_id);
+            mtool_module_message_holder * holder = NULL;
+            mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
                 MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
-                NULL, MSG_MAVC_ACCEPT_CALL, 0, 0, content, strlen(content) + 1);
-        } else if (!strcasecmp(cmd, "AcceptAudio") || !strcmp(cmd, "aa"))
+                NULL, MSG_MAVC_HANGUP_CALL, 0, 0, content, strlen(content) + 1, 2000, &holder);
+            if (NULL != holder)
+            {
+                MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
+                mtool_module_message_holder_destroy(holder);
+            }
+        } else if (!strcasecmp(cmd_name, "MakeCall") || !strcmp(cmd_name, "m"))
         {
+            char * param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            if (!strcasecmp(param, "--help") || !strcasecmp(param, "-h"))
+            {
+                MAVC_LOGI(LOG_TAG, "MakeCall/m remote-ip has-audio<1|0> has-video<1|0> [--abort]");
+                continue;
+            }
+
+            const char * remote_ip = param;
+            param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            bool has_audio = strcmp(param, "0");
+            param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            bool has_video = strcmp(param, "0");
+            CHECK_ABORT_ARG_(cmd, cmd_len, process_len);
+
+            cJSON * obj = cJSON_CreateObject();
+            cJSON_AddStringToObject(obj, "user_name", "MAVCTester");
+            cJSON_AddStringToObject(obj, "remote_host", remote_ip);
+            cJSON_AddBoolToObject(obj, "has_audio", has_audio);
+            cJSON_AddBoolToObject(obj, "has_video", has_video);
+            char * content = cJSON_PrintUnformatted(obj);
+            mtool_module_message_holder * holder = NULL;
+            mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+                MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
+                NULL, MSG_MAVC_MAKE_CALL, 0, 0, content, strlen(content) + 1, 2000, &holder);
+            if (NULL != holder)
+            {
+                MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
+                mtool_module_message_holder_destroy(holder);
+            }
+            free(content);
+            cJSON_free(obj);
+        } else if (!strcasecmp(cmd_name, "Cancel") || !strcmp(cmd_name, "c"))
+        {
+            char * param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            if (!strcasecmp(param, "--help") || !strcasecmp(param, "-h"))
+            {
+                MAVC_LOGI(LOG_TAG, "Cancel/c call-id [--abort]");
+                continue;
+            }
+
+            int call_id = atoi(param);
+            CHECK_ABORT_ARG_(cmd, cmd_len, process_len);
+
             char content[64] = {0};
-            snprintf(content, sizeof(content), "{\"id\": %d, \"has_audio\": true, \"has_video\": false}", g_call_id);
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+            snprintf(content, sizeof(content), "{\"id\": %d}", call_id);
+            mtool_module_message_holder * holder = NULL;
+            mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
                 MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
-                NULL, MSG_MAVC_ACCEPT_CALL, 0, 0, content, strlen(content) + 1);
-        } else if (!strcasecmp(cmd, "AcceptVideo") || !strcmp(cmd, "av"))
+                NULL, MSG_MAVC_CANCEL_MAKE_CALL, 0, 0, content, strlen(content) + 1, 2000, &holder);
+            if (NULL != holder)
+            {
+                MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
+                mtool_module_message_holder_destroy(holder);
+            }
+        } else if (!strcasecmp(cmd_name, "Reject") || !strcmp(cmd_name, "r"))
         {
+            char * param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            if (!strcasecmp(param, "--help") || !strcasecmp(param, "-h"))
+            {
+                MAVC_LOGI(LOG_TAG, "Reject/r call-id [--abort]");
+                continue;
+            }
+
+            int call_id = atoi(param);
+            CHECK_ABORT_ARG_(cmd, cmd_len, process_len);
+
             char content[64] = {0};
-            snprintf(content, sizeof(content), "{\"id\": %d, \"has_audio\": false, \"has_video\": true}", g_call_id);
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+            snprintf(content, sizeof(content), "{\"id\": %d}", call_id);
+            mtool_module_message_holder * holder = NULL;
+            mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
                 MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
-                NULL, MSG_MAVC_ACCEPT_CALL, 0, 0, content, strlen(content) + 1);
-        } else if (!strcasecmp(cmd, "HangUp") || !strcmp(cmd, "h"))
+                NULL, MSG_MAVC_REJECT_CALL, 0, 0, content, strlen(content) + 1, 2000, &holder);
+            if (NULL != holder)
+            {
+                MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
+                mtool_module_message_holder_destroy(holder);
+            }
+        } else if (!strcasecmp(cmd_name, "Play") || !strcmp(cmd_name, "p"))
         {
+            char * param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            if (!strcasecmp(param, "--help") || !strcasecmp(param, "-h"))
+            {
+                MAVC_LOGI(LOG_TAG, "Play/p file loop<0|1> [--abort]");
+                continue;
+            }
+
+            const char * file = param;
+            param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            bool loop = strcmp(param, "0");
+            CHECK_ABORT_ARG_(cmd, cmd_len, process_len);
+
             char content[64] = {0};
-            snprintf(content, sizeof(content), "{\"id\": %d}", g_call_id);
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
-                MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
-                NULL, MSG_MAVC_HANGUP_CALL, 0, 0, content, strlen(content) + 1);
-        } else if (!strcasecmp(cmd, "MakeCall") || !strcmp(cmd, "m"))
-        {
-            char content[64] = {0};
-            snprintf(content, sizeof(content), "{\"user_name\": \"MAVCTester\", \"remote_host\": \"" CALL_IP "\"}");
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
-                MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
-                NULL, MSG_MAVC_MAKE_CALL, 0, 0, content, strlen(content) + 1);
-        } else if (!strcasecmp(cmd, "MakeCallAudio") || !strcmp(cmd, "ma"))
-        {
-            char content[128] = {0};
-            snprintf(content, sizeof(content), "{\"user_name\": \"MAVCTester\", \"remote_host\": \"" CALL_IP
-                "\", \"has_audio\": true, \"has_video\": false}");
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
-                MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
-                NULL, MSG_MAVC_MAKE_CALL, 0, 0, content, strlen(content) + 1);
-        } else if (!strcasecmp(cmd, "MakeCallVideo") || !strcmp(cmd, "mv"))
-        {
-            char content[128] = {0};
-            snprintf(content, sizeof(content), "{\"user_name\": \"MAVCTester\", \"remote_host\": \"" CALL_IP
-                "\", \"has_audio\": false, \"has_video\": true}");
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
-                MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
-                NULL, MSG_MAVC_MAKE_CALL, 0, 0, content, strlen(content) + 1);
-        } else if (!strcasecmp(cmd, "Cancel") || !strcmp(cmd, "c"))
-        {
-            char content[64] = {0};
-            snprintf(content, sizeof(content), "{\"id\": %d}", g_call_id);
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
-                MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
-                NULL, MSG_MAVC_CANCEL_MAKE_CALL, 0, 0, content, strlen(content) + 1);
-        } else if (!strcasecmp(cmd, "Reject") || !strcmp(cmd, "r"))
-        {
-            char content[64] = {0};
-            snprintf(content, sizeof(content), "{\"id\": %d}", g_call_id);
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
-                MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
-                NULL, MSG_MAVC_REJECT_CALL, 0, 0, content, strlen(content) + 1);
-        } else if (!strcasecmp(cmd, "Play") || !strcmp(cmd, "p"))
-        {
-            char content[64] = {0};
-            snprintf(content, sizeof(content), "{\"file\": \"/customer/nfs/1.wav\", \"loop\": 0}");
+            snprintf(content, sizeof(content), "{\"file\": \"%s\", \"loop\": %d}", file, loop ? 1 : 0);
             mtool_module_message_holder * holder = NULL;
             mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
                 MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
@@ -320,73 +509,243 @@ int main(int argc, char *argv[], char *env[])
             if (NULL != holder)
             {
                 MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
-                cJSON * obj = cJSON_Parse((char *) holder->content);
-                g_play_id = (int) cJSON_GetNumberValue(cJSON_GetObjectItem(obj, "id"));
-                cJSON_Delete(obj);
 
                 mtool_module_message_holder_destroy(holder);
                 holder = NULL;
             }
-        } else if (!strcasecmp(cmd, "PausePlay") || !strcmp(cmd, "pp"))
+        } else if (!strcasecmp(cmd_name, "StopPlay") || !strcmp(cmd_name, "sp"))
         {
+            char * param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            if (!strcasecmp(param, "--help") || !strcasecmp(param, "-h"))
+            {
+                MAVC_LOGI(LOG_TAG, "StopPlay/sp play-id [--abort]");
+                continue;
+            }
+
+            int play_id = atoi(param);
+            CHECK_ABORT_ARG_(cmd, cmd_len, process_len);
+
             char content[64] = {0};
-            snprintf(content, sizeof(content), "{\"id\": %d}", g_play_id);
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+            snprintf(content, sizeof(content), "{\"id\": %d}", play_id);
+            mtool_module_message_holder * holder = NULL;
+            mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
                 MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
-                NULL, MSG_MAVC_PAUSE_PLAY_AUDIO, 0, 0, content, strlen(content) + 1);
-        } else if (!strcasecmp(cmd, "ResumePlay") || !strcmp(cmd, "rp"))
+                NULL, MSG_MAVC_STOP_PLAY_AUDIO, 0, 0, content, strlen(content) + 1, 2000, &holder);
+            if (NULL != holder)
+            {
+                MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
+                mtool_module_message_holder_destroy(holder);
+            }
+        } else if (!strcasecmp(cmd_name, "PausePlay") || !strcmp(cmd_name, "pp"))
         {
+            char * param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            if (!strcasecmp(param, "--help") || !strcasecmp(param, "-h"))
+            {
+                MAVC_LOGI(LOG_TAG, "PausePlay/pp play-id [--abort]");
+                continue;
+            }
+
+            int play_id = atoi(param);
+            CHECK_ABORT_ARG_(cmd, cmd_len, process_len);
+
             char content[64] = {0};
-            snprintf(content, sizeof(content), "{\"id\": %d}", g_play_id);
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+            snprintf(content, sizeof(content), "{\"id\": %d}", play_id);
+            mtool_module_message_holder * holder = NULL;
+            mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
                 MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
-                NULL, MSG_MAVC_RESUME_PLAY_AUDIO, 0, 0, content, strlen(content) + 1);
-        } else if (!strcasecmp(cmd, "StopPlay") || !strcmp(cmd, "sp"))
+                NULL, MSG_MAVC_PAUSE_PLAY_AUDIO, 0, 0, content, strlen(content) + 1, 2000, &holder);
+            if (NULL != holder)
+            {
+                MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
+                mtool_module_message_holder_destroy(holder);
+            }
+        } else if (!strcasecmp(cmd_name, "ResumePlay") || !strcmp(cmd_name, "rp"))
         {
+            char * param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            if (!strcasecmp(param, "--help") || !strcasecmp(param, "-h"))
+            {
+                MAVC_LOGI(LOG_TAG, "ResumePlay/rp play-id [--abort]");
+                continue;
+            }
+
+            int play_id = atoi(param);
+            CHECK_ABORT_ARG_(cmd, cmd_len, process_len);
+
             char content[64] = {0};
-            snprintf(content, sizeof(content), "{\"id\": %d}", g_play_id);
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+            snprintf(content, sizeof(content), "{\"id\": %d}", play_id);
+            mtool_module_message_holder * holder = NULL;
+            mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
                 MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
-                NULL, MSG_MAVC_STOP_PLAY_AUDIO, 0, 0, content, strlen(content) + 1);
-        } else if (!strcasecmp(cmd, "Down") || !strcmp(cmd, "d"))
+                NULL, MSG_MAVC_RESUME_PLAY_AUDIO, 0, 0, content, strlen(content) + 1, 2000, &holder);
+            if (NULL != holder)
+            {
+                MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
+                mtool_module_message_holder_destroy(holder);
+            }
+        } else if (!strcasecmp(cmd_name, "VolumeDown") || !strcmp(cmd_name, "vd"))
         {
-            char content[64] = {0};
+            char * param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            if (!strcasecmp(param, "--help") || !strcasecmp(param, "-h"))
+            {
+                MAVC_LOGI(LOG_TAG, "VolumeDown/vd play-id [--abort]");
+                continue;
+            }
+
+            int play_id = atoi(param);
+            CHECK_ABORT_ARG_(cmd, cmd_len, process_len);
+
             if (g_current_volume > 0)
             {
                 --g_current_volume;
             }
-            snprintf(content, sizeof(content), "{\"id\": %d, \"volume\": %d}", g_play_id, g_current_volume);
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
-                MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
-                NULL, MSG_MAVC_SET_VOLUME, 0, 0, content, strlen(content) + 1);
-        } else if (!strcasecmp(cmd, "Up") || !strcmp(cmd, "u"))
-        {
+
             char content[64] = {0};
+            snprintf(content, sizeof(content), "{\"id\": %d, \"volume\": %d}", play_id, g_current_volume);
+            mtool_module_message_holder * holder = NULL;
+            mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+                MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
+                NULL, MSG_MAVC_SET_VOLUME, 0, 0, content, strlen(content) + 1, 2000, &holder);
+            if (NULL != holder)
+            {
+                MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
+                mtool_module_message_holder_destroy(holder);
+            }
+        } else if (!strcasecmp(cmd_name, "VolumeUp") || !strcmp(cmd_name, "vu"))
+        {
+            char * param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            if (!strcasecmp(param, "--help") || !strcasecmp(param, "-h"))
+            {
+                MAVC_LOGI(LOG_TAG, "VolumeUp/vu play-id [--abort]");
+                continue;
+            }
+
+            int play_id = atoi(param);
+            CHECK_ABORT_ARG_(cmd, cmd_len, process_len);
+
             if (g_current_volume < 10)
             {
                 ++g_current_volume;
             }
-            snprintf(content, sizeof(content), "{\"id\": %d, \"volume\": %d}", g_play_id, g_current_volume);
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
-                MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
-                NULL, MSG_MAVC_SET_VOLUME, 0, 0, content, strlen(content) + 1);
-        } else if (!strcasecmp(cmd, "RecordBegin") || !strcmp(cmd, "rb"))
-        {
+
             char content[64] = {0};
-            snprintf(content, sizeof(content), "{\"file\": \"/customer/nfs/record.wav\", \"sources\": \"MIC\"}");
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+            snprintf(content, sizeof(content), "{\"id\": %d, \"volume\": %d}", play_id, g_current_volume);
+            mtool_module_message_holder * holder = NULL;
+            mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
                 MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
-                NULL, MSG_MAVC_START_RECORD, 0, 0, content, strlen(content) + 1);
-        } else if (!strcasecmp(cmd, "RecordEnd") || !strcmp(cmd, "re"))
+                NULL, MSG_MAVC_SET_VOLUME, 0, 0, content, strlen(content) + 1, 2000, &holder);
+            if (NULL != holder)
+            {
+                MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
+                mtool_module_message_holder_destroy(holder);
+            }
+        } else if (!strcasecmp(cmd_name, "RecordBegin") || !strcmp(cmd_name, "rb"))
         {
-            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_BINARY_CONTENT,
+            char * param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            if (!strcasecmp(param, "--help") || !strcasecmp(param, "-h"))
+            {
+                MAVC_LOGI(LOG_TAG, "RecordBegin/rb file source<MIC|CALL> [--abort]");
+                continue;
+            }
+
+            const char * file = param;
+            param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            const char * source_str = param;
+            CHECK_ABORT_ARG_(cmd, cmd_len, process_len);
+
+            if (!strcasecmp(source_str, "MIC") ||
+                !strcasecmp(source_str, "CALL"))
+            {
+                // Do nothing.
+            } else
+            {
+                MAVC_LOGE(LOG_TAG, "Invalid source: %s", source_str);
+                continue;
+            }
+
+            char content[64] = {0};
+            snprintf(content, sizeof(content), "{\"file\": \"%s\", \"sources\": \"%s\"}", file, source_str);
+            mtool_module_message_holder * holder = NULL;
+            mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
                 MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
-                NULL, MSG_MAVC_STOP_RECORD, 0, 0, NULL, 0);
-        } else if(!strcasecmp(cmd, "RegisterServer") || !strcmp(cmd, "rs"))
+                NULL, MSG_MAVC_START_RECORD, 0, 0, content, strlen(content) + 1, 2000, &holder);
+            if (NULL != holder)
+            {
+                MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
+                mtool_module_message_holder_destroy(holder);
+            }
+        } else if (!strcasecmp(cmd_name, "RecordEnd") || !strcmp(cmd_name, "re"))
         {
-            char content[128] = {0};
-            snprintf(content, sizeof(content), "{\"username\": \"100025\", \"password\": \"h12345\", " \
-                "\"server_host\": \"120.76.99.131\", \"port\": 25099, \"is_default\": true, \"transport\": 1}");
+            char * param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, false);
+            if (!strcasecmp(param, "--help") || !strcasecmp(param, "-h"))
+            {
+                MAVC_LOGI(LOG_TAG, "RecordEnd/re [--abort]");
+                continue;
+            }
+            CHECK_ABORT_ARG_(cmd, cmd_len, process_len);
+
+            mtool_module_message_holder * holder = NULL;
+            mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_BINARY_CONTENT,
+                MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
+                NULL, MSG_MAVC_STOP_RECORD, 0, 0, NULL, 0, 2000, &holder);
+            if (NULL != holder)
+            {
+                MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
+                mtool_module_message_holder_destroy(holder);
+            }
+        } else if(!strcasecmp(cmd_name, "RegisterServer") || !strcmp(cmd_name, "rs"))
+        {
+            char * param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            if (!strcasecmp(param, "--help") || !strcasecmp(param, "-h"))
+            {
+                MAVC_LOGI(LOG_TAG, "RegisterServer/rs server_host port tranport_type<UDP|TCP|TLS|DEF>" \
+                    " username password default<0|1> [--abort]");
+                continue;
+            }
+
+            const char * server_host = param;
+            param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            int port = atoi(param);
+            param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            const char * tp_str = param;
+            param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            const char * username = param;
+            param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            const char * password = param;
+            param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            bool is_default = 0 != atoi(param);
+            CHECK_ABORT_ARG_(cmd, cmd_len, process_len);
+
+
+            int tp = 0;
+            if (!strcasecmp(tp_str, "UDP"))
+            {
+                tp = 1;
+            } else if (!strcasecmp(tp_str, "TCP"))
+            {
+                tp = 2;
+            } else if (!strcasecmp(tp_str, "TLS"))
+            {
+                tp = 3;
+            }
+
+            char content[128];
+            snprintf(content, sizeof(content), "{\"username\": \"%s\", \"password\": \"%s\", " \
+                "\"server_host\": \"%s\", \"port\": %d, \"is_default\": %s, \"transport\": %d}",
+                username, password, server_host, port, is_default ? "true" : "false", tp);
             mtool_module_message_holder * holder = NULL;
             mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
                 MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
@@ -396,10 +755,21 @@ int main(int argc, char *argv[], char *env[])
                 MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
                 mtool_module_message_holder_destroy(holder);
             }
-        } else if(!strcasecmp(cmd, "UnRegisterServer") || !strcmp(cmd, "urs"))
+        } else if(!strcasecmp(cmd_name, "UnRegisterServer") || !strcmp(cmd_name, "urs"))
         {
+            char * param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            if (!strcasecmp(param, "--help") || !strcasecmp(param, "-h"))
+            {
+                MAVC_LOGI(LOG_TAG, "UnRegisterServer/urs acc_id [--abort]");
+                continue;
+            }
+
+            int acc_id = atoi(param);
+            CHECK_ABORT_ARG_(cmd, cmd_len, process_len);
+
             char content[64] = {0};
-            snprintf(content, sizeof(content), "{\"account_id\": 2}");
+            snprintf(content, sizeof(content), "{\"account_id\": %d}", acc_id);
             mtool_module_message_holder * holder = NULL;
             mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
                 MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
@@ -409,8 +779,17 @@ int main(int argc, char *argv[], char *env[])
                 MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
                 mtool_module_message_holder_destroy(holder);
             }
-        } else if(!strcasecmp(cmd, "GetAccountList") || !strcmp(cmd, "gal"))
+        } else if(!strcasecmp(cmd_name, "GetAccountList") || !strcmp(cmd_name, "gal"))
         {
+            char * param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, false);
+            if (!strcasecmp(param, "--help") || !strcasecmp(param, "-h"))
+            {
+                MAVC_LOGI(LOG_TAG, "GetAccountList/gal [--abort]");
+                continue;
+            }
+            CHECK_ABORT_ARG_(cmd, cmd_len, process_len);
+
             mtool_module_message_holder * holder = NULL;
             mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_BINARY_CONTENT,
                 MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
@@ -422,8 +801,19 @@ int main(int argc, char *argv[], char *env[])
             }
         } else if(!strcasecmp(cmd, "SetDefaultAccount") || !strcmp(cmd, "sda"))
         {
+            char * param = ARG_NEXT_(cmd, cmd_len, process_len);
+            CHECK_ARG_(param, true);
+            if (!strcasecmp(param, "--help") || !strcasecmp(param, "-h"))
+            {
+                MAVC_LOGI(LOG_TAG, "SetDefaultAccount/sda acc_id [--abort]");
+                continue;
+            }
+
+            int acc_id = atoi(param);
+            CHECK_ABORT_ARG_(cmd, cmd_len, process_len);
+
             char content[64] = {0};
-            snprintf(content, sizeof(content), "{\"account_id\": 2}");
+            snprintf(content, sizeof(content), "{\"account_id\": %d}", acc_id);
             mtool_module_message_holder * holder = NULL;
             mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
                 MODULE_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
@@ -433,7 +823,7 @@ int main(int argc, char *argv[], char *env[])
                 MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
                 mtool_module_message_holder_destroy(holder);
             }
-        } else if (!strcasecmp(cmd, "quit") || !strcmp(cmd, "q"))
+        } else if (!strcasecmp(cmd_name, "quit") || !strcmp(cmd_name, "q"))
         {
             break;
         }
