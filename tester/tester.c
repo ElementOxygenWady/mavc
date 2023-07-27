@@ -799,7 +799,7 @@ int main(int argc, char *argv[], char *env[])
                 MAVC_LOGI(LOG_TAG, "Recv: %s", (char *) holder->content);
                 mtool_module_message_holder_destroy(holder);
             }
-        } else if(!strcasecmp(cmd, "SetDefaultAccount") || !strcmp(cmd, "sda"))
+        } else if(!strcasecmp(cmd_name, "SetDefaultAccount") || !strcmp(cmd_name, "sda"))
         {
             char * param = ARG_NEXT_(cmd, cmd_len, process_len);
             CHECK_ARG_(param, true);
