@@ -379,6 +379,22 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
                     if (accounts[i].m_is_local_account)
                     {
                         cJSON_AddStringToObject(acc_obj, "acc_url", accounts[i].m_details.m_local_account.m_acc_url);
+                        mavc_transport_e tp = MAVC_TP_AUTO;
+                        switch (accounts[i].m_details.m_local_account.m_transport)
+                        {
+                            case PJAPP_TP_TCP:
+                                tp = MAVC_TP_TCP;
+                                break;
+                            case PJAPP_TP_TLS:
+                                tp = MAVC_TP_TLS;
+                                break;
+                            case PJAPP_TP_UDP:
+                                tp = MAVC_TP_UDP;
+                                break;
+                            default:
+                                break;
+                        }
+                        cJSON_AddNumberToObject(acc_obj, "transport", tp);
                     } else
                     {
                         cJSON_AddStringToObject(acc_obj, "acc_url", accounts[i].m_details.m_server_account.m_acc_url);
@@ -388,6 +404,22 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
                         cJSON_AddStringToObject(acc_obj, "username", accounts[i].m_details.m_server_account.m_username);
                         cJSON_AddNumberToObject(acc_obj, "account_status",
                             accounts[i].m_details.m_server_account.m_status);
+                        mavc_transport_e tp = MAVC_TP_AUTO;
+                        switch (accounts[i].m_details.m_server_account.m_transport)
+                        {
+                            case PJAPP_TP_TCP:
+                                tp = MAVC_TP_TCP;
+                                break;
+                            case PJAPP_TP_TLS:
+                                tp = MAVC_TP_TLS;
+                                break;
+                            case PJAPP_TP_UDP:
+                                tp = MAVC_TP_UDP;
+                                break;
+                            default:
+                                break;
+                        }
+                        cJSON_AddNumberToObject(acc_obj, "transport", tp);
                     }
                     cJSON_AddItemToArray(arr, acc_obj);
                 }
