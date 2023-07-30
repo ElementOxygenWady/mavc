@@ -445,6 +445,14 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
             cJSON_Delete(obj);
             break;
         }
+        case MSG_GWE_NOTIFY_IP_CHANGED: {
+            pjapp_err err = pjapp_ip_change();
+            if (PJAPP_ERR_SUCCESS != err)
+            {
+                MAVC_LOGE(LOG_TAG, "Failed to handle IP changed, reason: %s.", pjapp_error(err));
+            }
+            break;
+        }
         default:
             status = MT_EUNKNOWN;
         break;
