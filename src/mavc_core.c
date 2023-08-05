@@ -14,6 +14,9 @@
 #include <mavc/mavc_pub.h>
 #include <e2str/e2str_module_message.h>
 #include <pjapp/pjapp.h>
+#include <pthread.h>
+#include <stdbool.h>
+#include <unistd.h>
 
 /**
  * @addtogroup SOURCE_FILES All source files
@@ -22,15 +25,36 @@
 
 #define UI_MODULE MTOOL_MODULE_GUI_NAME
 
+#define MAVC_CORE_MAX_ACCOUNTS 4
 
+
+enum mavc_internal_message_e;
 struct mavc_t;
 
+typedef enum mavc_internal_message_e mavc_internal_message_e;
 typedef struct mavc_t mavc_t;
 
+
+enum mavc_internal_message_e
+{
+    MAVC_INTERNAL_MSG_BEGIN = MSG_MAVC_INTERNAL,
+    MAVC_INTERNAL_MSG_FETCH_ACCOUNTS,
+    MAVC_INTERNAL_MSG_REGISTER_ACCOUNTS,
+    MAVC_INTERNAL_MSG_TRY_RECYCLE_FETCH_CONFIG_THREAD,
+};
 
 struct mavc_t
 {
     const mavc_config_t * m_config;
+    pthread_t m_tid_fetch_config;
+    struct {
+        mavc_server_account_t m_accounts[MAVC_CORE_MAX_ACCOUNTS];
+        unsigned m_n_accounts;
+        bool m_run;
+        bool m_do_fetch_acc;
+        bool m_in_process;
+    } m_thread_data;
+    pthread_mutex_t m_locker;
 };
 
 
@@ -38,8 +62,160 @@ static mavc_t * mavc_get(void)
 {
     static mavc_t instance = {
         .m_config = NULL,
+        .m_tid_fetch_config = 0,
+        .m_thread_data = {
+            .m_n_accounts = 0,
+            .m_run = false,
+            .m_do_fetch_acc = false,
+            .m_in_process = false,
+        }
     };
     return &instance;
+}
+
+static void * mavc_thread_fetch_config(void * arg)
+{
+    mavc_t * instance = mavc_get();
+    pthread_mutex_lock(&instance->m_locker);
+    instance->m_thread_data.m_in_process = true;
+    pthread_mutex_unlock(&instance->m_locker);
+    while (instance->m_thread_data.m_run)
+    {
+        bool do_break = false;
+        pthread_mutex_lock(&instance->m_locker);
+        if (!instance->m_thread_data.m_do_fetch_acc)
+        {
+            do_break = true;
+        } else
+        {
+            instance->m_thread_data.m_run = false;
+            instance->m_thread_data.m_do_fetch_acc = false;
+        }
+        pthread_mutex_unlock(&instance->m_locker);
+        ASSERT_BREAK(!do_break);
+
+        mtool_module_message_holder * holder = NULL;
+        if (MT_SUCCESS != mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+                MTOOL_MODULE_AVC_NAME, -1, MTOOL_MODULE_GWE_NAME, -1,
+                NULL, MSG_GWE_GET_SIP_ACCOUNTS, 0, 0, NULL, 0, 2000, &holder))
+        {
+            usleep(2000000);
+            pthread_mutex_lock(&instance->m_locker);
+            instance->m_thread_data.m_do_fetch_acc = true;
+            pthread_mutex_unlock(&instance->m_locker);
+            continue;
+        }
+        if (NULL != holder)
+        {
+            cJSON * json = cJSON_Parse((char *) holder->content);
+            do {
+                instance->m_thread_data.m_n_accounts = 0;
+                cJSON * arr = cJSON_GetObjectItem(json, "accounts");
+                ASSERT_BREAK(NULL != arr);
+                int n_elems = cJSON_GetArraySize(arr);
+                for (int i = 0; i < n_elems && i < MAVC_CORE_MAX_ACCOUNTS; ++i)
+                {
+                    cJSON * elem = cJSON_GetArrayItem(arr, i);
+                    memset(&instance->m_thread_data.m_accounts[i], 0, sizeof(instance->m_thread_data.m_accounts[i]));
+                    cJSON * obj_username = cJSON_GetObjectItem(elem, "username");
+                    if (NULL != obj_username)
+                    {
+                        snprintf(instance->m_thread_data.m_accounts[i].m_acc_info.m_username,
+                            sizeof(instance->m_thread_data.m_accounts[i].m_acc_info.m_username),
+                            "%s", cJSON_GetStringValue(obj_username));
+                    }
+                    cJSON * obj_password = cJSON_GetObjectItem(elem, "password");
+                    if (NULL != obj_password)
+                    {
+                        snprintf(instance->m_thread_data.m_accounts[i].m_acc_info.m_password,
+                            sizeof(instance->m_thread_data.m_accounts[i].m_acc_info.m_password),
+                            "%s", cJSON_GetStringValue(obj_password));
+                    }
+                    cJSON * obj_server = cJSON_GetObjectItem(elem, "server");
+                    if (NULL != obj_server)
+                    {
+                        snprintf(instance->m_thread_data.m_accounts[i].m_acc_info.m_server_host,
+                            sizeof(instance->m_thread_data.m_accounts[i].m_acc_info.m_server_host),
+                            "%s", cJSON_GetStringValue(obj_server));
+                    } else
+                    {
+                        continue;
+                    }
+                    cJSON * obj_port = cJSON_GetObjectItem(elem, "port");
+                    if (NULL != obj_port)
+                    {
+                        instance->m_thread_data.m_accounts[i].m_acc_info.m_port = cJSON_GetNumberValue(obj_port);
+                    } else
+                    {
+                        instance->m_thread_data.m_accounts[i].m_acc_info.m_port = 5060;
+                    }
+                    cJSON * obj_tp = cJSON_GetObjectItem(elem, "transport");
+                    if (NULL != obj_tp)
+                    {
+                        switch ((int) cJSON_GetNumberValue(obj_tp))
+                        {
+                            case MAVC_TP_UDP:
+                                instance->m_thread_data.m_accounts[i].m_tp = MAVC_TP_UDP;
+                                break;
+                            case MAVC_TP_TCP:
+                                instance->m_thread_data.m_accounts[i].m_tp = MAVC_TP_TCP;
+                                break;
+                            case MAVC_TP_TLS:
+                                instance->m_thread_data.m_accounts[i].m_tp = MAVC_TP_TLS;
+                                break;
+                            case MAVC_TP_AUTO:
+                            default:
+                                instance->m_thread_data.m_accounts[i].m_tp = MAVC_TP_AUTO;
+                                break;
+                        }
+                    } else
+                    {
+                        instance->m_thread_data.m_accounts[i].m_tp = MAVC_TP_AUTO;
+                    }
+                    cJSON * obj_active = cJSON_GetObjectItem(elem, "active");
+                    if (NULL != obj_active)
+                    {
+                        instance->m_thread_data.m_accounts[i].m_acc_info.m_active = cJSON_IsTrue(obj_active);
+                    }
+                    cJSON * obj_is_default = cJSON_GetObjectItem(elem, "is_default");
+                    if (NULL != obj_is_default)
+                    {
+                        instance->m_thread_data.m_accounts[i].m_is_default = cJSON_IsTrue(obj_is_default);
+                    }
+                    ++instance->m_thread_data.m_n_accounts;
+                }
+            } while (0);
+            cJSON_Delete(json);
+            mtool_module_message_holder_destroy(holder);
+            holder = NULL;
+
+            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_BINARY_CONTENT,
+                MTOOL_MODULE_AVC_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
+                NULL, MAVC_INTERNAL_MSG_REGISTER_ACCOUNTS, 0, 0, NULL, 0);
+        }
+
+        do_break = true;
+        pthread_mutex_lock(&instance->m_locker);
+        if (instance->m_thread_data.m_do_fetch_acc)
+        {
+            do_break = false;
+        } else
+        {
+            instance->m_thread_data.m_run = false;
+        }
+        pthread_mutex_unlock(&instance->m_locker);
+        ASSERT_BREAK(!do_break);
+    }
+
+    pthread_mutex_lock(&instance->m_locker);
+    instance->m_thread_data.m_in_process = false;
+    pthread_mutex_unlock(&instance->m_locker);
+
+    mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_BINARY_CONTENT,
+        MTOOL_MODULE_AVC_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
+        NULL, MAVC_INTERNAL_MSG_TRY_RECYCLE_FETCH_CONFIG_THREAD, 0, 0, NULL, 0);
+
+    pthread_exit(NULL);
 }
 
 static void mavc_on_incoming_call(const void * call)
@@ -188,6 +364,9 @@ static mt_status_t module_load(mtool_module *module)
 
 static mt_status_t module_start(mtool_module *module)
 {
+    mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_BINARY_CONTENT,
+        MTOOL_MODULE_AVC_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
+        NULL, MAVC_INTERNAL_MSG_FETCH_ACCOUNTS, 0, 0, NULL, 0);
     return MT_SUCCESS;
 }
 
@@ -450,6 +629,101 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
             if (PJAPP_ERR_SUCCESS != err)
             {
                 MAVC_LOGE(LOG_TAG, "Failed to handle IP changed, reason: %s.", pjapp_error(err));
+            }
+            break;
+        }
+        case MSG_GWE_AVAILABLE: {
+            // Load configurations
+            mtool_module_send_nonblock(MTOOL_MODULE_MESSAGE_BINARY_CONTENT,
+                MTOOL_MODULE_AVC_NAME, -1, MTOOL_MODULE_AVC_NAME, -1,
+                NULL, MAVC_INTERNAL_MSG_FETCH_ACCOUNTS, 0, 0, NULL, 0);
+            break;
+        }
+        case MAVC_INTERNAL_MSG_FETCH_ACCOUNTS: {
+            mavc_t * instance = mavc_get();
+            pthread_mutex_lock(&instance->m_locker);
+            instance->m_thread_data.m_run = true;
+            instance->m_thread_data.m_do_fetch_acc = true;
+            pthread_mutex_unlock(&instance->m_locker);
+            if (instance->m_tid_fetch_config <= 0)
+            {
+                pthread_create(&instance->m_tid_fetch_config, NULL, mavc_thread_fetch_config, NULL);
+            }
+            break;
+        }
+        case MAVC_INTERNAL_MSG_REGISTER_ACCOUNTS: {
+            mavc_t * instance = mavc_get();
+            for (unsigned i = 0; i < instance->m_thread_data.m_n_accounts; ++i)
+            {
+                pjapp_server_account_t server_acc;
+                snprintf(server_acc.m_acc_url, sizeof(server_acc.m_acc_url), "sip:%s@%s",
+                    instance->m_thread_data.m_accounts[i].m_acc_info.m_username,
+                    instance->m_thread_data.m_accounts[i].m_acc_info.m_server_host);
+                if (instance->m_thread_data.m_accounts[i].m_acc_info.m_port > 0)
+                {
+                    snprintf(server_acc.m_server_url, sizeof(server_acc.m_server_url), "sip:%s:%d",
+                        instance->m_thread_data.m_accounts[i].m_acc_info.m_server_host,
+                        instance->m_thread_data.m_accounts[i].m_acc_info.m_port);
+                } else
+                {
+                    snprintf(server_acc.m_server_url, sizeof(server_acc.m_server_url), "sip:%s",
+                        instance->m_thread_data.m_accounts[i].m_acc_info.m_server_host);
+                }
+                pjapp_transport_enum tp;
+                pjapp_transport_enum * tp_ = &tp;
+                switch (instance->m_thread_data.m_accounts[i].m_tp)
+                {
+                    case MAVC_TP_UDP:
+                        tp = PJAPP_TP_UDP;
+                        break;
+                    case MAVC_TP_TCP:
+                        tp = PJAPP_TP_TCP;
+                        break;
+                    case MAVC_TP_TLS:
+                        tp = PJAPP_TP_TLS;
+                        break;
+                    default:
+                        tp_ = NULL;
+                }
+                snprintf(server_acc.m_realm, sizeof(server_acc.m_realm), "*");
+                snprintf(server_acc.m_username, sizeof(server_acc.m_username), "%s",
+                    instance->m_thread_data.m_accounts[i].m_acc_info.m_username);
+                snprintf(server_acc.m_password, sizeof(server_acc.m_password), "%s",
+                    instance->m_thread_data.m_accounts[i].m_acc_info.m_password);
+                int acc_id = PJAPP_INVALID_ID;
+                pjapp_err err = pjapp_register_account(&server_acc,
+                    instance->m_thread_data.m_accounts[i].m_is_default, tp_, &acc_id);
+                if (PJAPP_ERR_SUCCESS != err)
+                {
+                    MAVC_LOGE(LOG_TAG, "Failed to register account<%s> for reason: %s.",
+                        server_acc.m_acc_url, pjapp_error(err));
+                }
+            }
+            break;
+        }
+        case MAVC_INTERNAL_MSG_TRY_RECYCLE_FETCH_CONFIG_THREAD: {
+            mavc_t * instance = mavc_get();
+            bool do_recreate = false;
+            pthread_mutex_lock(&instance->m_locker);
+            instance->m_thread_data.m_run = false;
+            if (!instance->m_thread_data.m_do_fetch_acc)
+            {
+                // Do nothing.
+            } else if (!instance->m_thread_data.m_in_process)
+            {
+                // Fetch config thread breaks from the loop, and a new fetch config request processed,
+                // so join the thread and then re-create it.
+                do_recreate = true;
+            }
+            pthread_mutex_unlock(&instance->m_locker);
+            if (instance->m_tid_fetch_config > 0)
+            {
+                pthread_join(instance->m_tid_fetch_config, NULL);
+            }
+            if (do_recreate)
+            {
+                instance->m_thread_data.m_run = true;
+                pthread_create(&instance->m_tid_fetch_config, NULL, mavc_thread_fetch_config, NULL);
             }
             break;
         }
