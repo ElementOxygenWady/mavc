@@ -57,6 +57,8 @@ extern "C" {
 #endif
 
 
+#define ASSERT_BREAK_SILENT(cond) if (!(cond)) break
+
 #ifdef LOG_DEBUG
 #ifndef LOG_TAG
 #define LOG_TAG "MAVC_PRI"
@@ -64,7 +66,7 @@ extern "C" {
 #define LOG_TAG_DEBUG LOG_TAG ".Debug"
 #define ASSERT_BREAK(cond) if (!(cond)) { MAVC_LOGE(LOG_TAG_DEBUG, "Error assertion: %s", #cond); break; }
 #else
-#define ASSERT_BREAK(cond) if (!(cond)) break
+#define ASSERT_BREAK(cond) ASSERT_BREAK_SILENT(cond)
 #endif
 
 

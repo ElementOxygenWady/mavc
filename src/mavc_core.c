@@ -204,7 +204,7 @@ static void * mavc_thread_fetch_config(void * arg)
             instance->m_thread_data.m_run = false;
         }
         pthread_mutex_unlock(&instance->m_locker);
-        ASSERT_BREAK(!do_break);
+        ASSERT_BREAK_SILENT(!do_break);
     }
 
     pthread_mutex_lock(&instance->m_locker);
@@ -519,6 +519,54 @@ static mt_status_t module_on_rx_msg(mtool_module *module, mtool_module_message *
             if (PJAPP_ERR_SUCCESS == err)
             {
                 cJSON_AddNumberToObject(obj, "account_id", acc_id);
+
+                // Save the new account.
+                cJSON * json = cJSON_CreateObject();
+                if (NULL == json)
+                {
+                    MAVC_LOGE(LOG_TAG, "Failed to create object to save the account.");
+                } else
+                {
+                    cJSON_AddStringToObject(json, "username", server_acc_info.m_acc_info.m_username);
+                    cJSON_AddStringToObject(json, "password", server_acc_info.m_acc_info.m_password);
+                    cJSON_AddStringToObject(json, "server", server_acc_info.m_acc_info.m_server_host);
+                    cJSON_AddNumberToObject(json, "port", server_acc_info.m_acc_info.m_port);
+                    cJSON_AddNumberToObject(json, "transport", server_acc_info.m_tp);
+                    cJSON_AddBoolToObject(json, "active", server_acc_info.m_acc_info.m_active);
+                    cJSON_AddBoolToObject(json, "is_default", server_acc_info.m_is_default);
+                    char * req = cJSON_PrintUnformatted(json);
+                    if (NULL == req)
+                    {
+                        MAVC_LOGE(LOG_TAG, "Failed to generate string to save the account.");
+                    } else
+                    {
+                        mtool_module_message_holder * holder = NULL;
+                        mtool_module_send_reliable(MTOOL_MODULE_MESSAGE_JSON_CONTENT,
+                            MTOOL_MODULE_AVC_NAME, -1, MTOOL_MODULE_GWE_NAME, -1,
+                            NULL, MSG_GWE_ADD_SIP_ACCOUNT, 0, 0, req, strlen(req) + 1, 2000, &holder);
+                        if (NULL != holder)
+                        {
+                            cJSON * resp = cJSON_Parse((char *) holder->content);
+                            cJSON * result_obj = cJSON_GetObjectItem(resp, "result");
+                            if (NULL != result_obj)
+                            {
+                                bool is_success = cJSON_IsTrue(result_obj);
+                                MAVC_LOGI(LOG_TAG, "Save account result: %s.", is_success ? "true" : "false");
+                            } else
+                            {
+                                MAVC_LOGE(LOG_TAG, "ACK of saving account does not contain result.");
+                            }
+                            cJSON_Delete(resp);
+                            mtool_module_message_holder_destroy(holder);
+                            holder = NULL;
+                        } else
+                        {
+                            MAVC_LOGE(LOG_TAG, "No response for saving account.");
+                        }
+                        free(req);
+                    }
+                    cJSON_free(json);
+                }
             }
             char * ack = cJSON_PrintUnformatted(obj);
             mtool_module_send_reliable_ack2(message, MTOOL_MODULE_MESSAGE_JSON_CONTENT, 0, 0, ack, strlen(ack) + 1);
