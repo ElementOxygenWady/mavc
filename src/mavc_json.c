@@ -56,6 +56,8 @@ char * mavc_json_mavc_call_t_2_json_obj(const mavc_call_t * call)
 {
     cJSON * obj = cJSON_CreateObject();
     cJSON_AddNumberToObject(obj, "id", call->id);
+    cJSON_AddNumberToObject(obj, "status", call->status);
+    cJSON_AddStringToObject(obj, "status_description", call->status_desc);
     cJSON_AddStringToObject(obj, "user_name", call->user_name);
     cJSON_AddStringToObject(obj, "remote_host", call->remote_host);
     char * str = cJSON_PrintUnformatted(obj);
@@ -162,6 +164,8 @@ void mavc_json_json_obj_2_mavc_call_t(const char * json_str, mavc_call_t * call)
     if (NULL != obj)
     {
         json_get_number(obj, "id", call->id, -1, int);
+        json_get_number(obj, "status", call->status, 0, int);
+        json_str_obj_2_char_arr(obj, "status_description", call->status_desc);
         json_str_obj_2_char_arr(obj, "user_name", call->user_name);
         json_str_obj_2_char_arr(obj, "remote_host", call->remote_host);
         json_get_bool(obj, "has_audio", call->has_audio, true);

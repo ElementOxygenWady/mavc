@@ -21,8 +21,10 @@ extern "C" {
 typedef struct mavc_call_t
 {
     int id;
+    int status;
     char user_name[64];
     char remote_host[64];
+    char status_desc[32];
     bool has_audio;
     bool has_video;
     char reserved[2];

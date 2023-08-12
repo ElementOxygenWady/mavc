@@ -257,7 +257,8 @@ static void mavc_on_call_confirmed(const void * call)
 static void mavc_on_call_disconnected(const void * call)
 {
     const pjapp_call_t * call_info = (const pjapp_call_t *) call;
-    mavc_call_t call_obj = { .id = call_info->m_call_id };
+    mavc_call_t call_obj = { .id = call_info->m_call_id, .status = call_info->m_status };
+    snprintf(call_obj.status_desc, sizeof(call_obj.status_desc), "%s", call_info->m_status_desc);
     snprintf(call_obj.user_name, sizeof(call_obj.user_name), "%s", call_info->m_remote_username);
     snprintf(call_obj.remote_host, sizeof(call_obj.remote_host), "%s", call_info->m_remote_host);
     mavc_json_exec_1(mavc_call_t, &call_obj, content,
@@ -269,7 +270,8 @@ static void mavc_on_call_disconnected(const void * call)
 static void mavc_on_call_cancelled(const void * call)
 {
     const pjapp_call_t * call_info = (const pjapp_call_t *) call;
-    mavc_call_t call_obj = { .id = call_info->m_call_id };
+    mavc_call_t call_obj = { .id = call_info->m_call_id, .status = call_info->m_status };
+    snprintf(call_obj.status_desc, sizeof(call_obj.status_desc), "%s", call_info->m_status_desc);
     snprintf(call_obj.user_name, sizeof(call_obj.user_name), "%s", call_info->m_remote_username);
     snprintf(call_obj.remote_host, sizeof(call_obj.remote_host), "%s", call_info->m_remote_host);
     mavc_json_exec_1(mavc_call_t, &call_obj, content,
@@ -281,7 +283,8 @@ static void mavc_on_call_cancelled(const void * call)
 static void mavc_on_call_rejected(const void * call)
 {
     const pjapp_call_t * call_info = (const pjapp_call_t *) call;
-    mavc_call_t call_obj = { .id = call_info->m_call_id };
+    mavc_call_t call_obj = { .id = call_info->m_call_id, .status = call_info->m_status };
+    snprintf(call_obj.status_desc, sizeof(call_obj.status_desc), "%s", call_info->m_status_desc);
     snprintf(call_obj.user_name, sizeof(call_obj.user_name), "%s", call_info->m_remote_username);
     snprintf(call_obj.remote_host, sizeof(call_obj.remote_host), "%s", call_info->m_remote_host);
     mavc_json_exec_1(mavc_call_t, &call_obj, content,
